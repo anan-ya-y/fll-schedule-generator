@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
+from utils import TimeUtils
 
 class SubConfig:
     def __init__(self):
@@ -37,7 +38,7 @@ class Config:
         self.day.start_time = "9:00"
         self.day.opening_ceremony_duration = 20
         self.day.matches_start_time = "9:35"
-        self.day.judging = 25 # # of minutes between end of opening ceremony & first judging
+        self.day.judging_prep = 25 # # of minutes between end of opening ceremony & first judging
         self.day.closing_ceremony_time = "17:00"
         self.day.closing_ceremony_duration = 45
 
@@ -55,6 +56,7 @@ class Config:
         self.day.lunch_start = datetime.strptime(self.day.lunch_start, "%H:%M").time()
         self.day.closing_ceremony_time = datetime.strptime(self.day.closing_ceremony_time, "%H:%M").time()
         self.day.matches_start_time = datetime.strptime(self.day.matches_start_time, "%H:%M").time()
+        self.day.opening_ceremony_end_time = TimeUtils.add_minutes_to_time(self.day.start_time, self.day.opening_ceremony_duration)
 
         self.team.teamlist_file = "teamlist.csv"
         # read csv, turn it into df
@@ -65,4 +67,5 @@ class Config:
         self.team.teamnos_to_names = {row["Team Number"]: row["Team Name"] for _, row in self.team.teamlist.iterrows()}
         self.team.teamnos_to_distances = {row["Team Number"]: row["Distance"] for _, row in self.team.teamlist.iterrows()}
 
-
+        assert len(self.team.teamnames) == self.tournament.nteams, "Number of teams in teamlist does not match nteams in config."
+    
