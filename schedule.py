@@ -51,6 +51,7 @@ class Schedule:
     def __init__(self, config):
         self.config = config
         self.events = []
+        self.events_by_team = {} # team : {round 1: (time, roomno), ...}
 
         self.judging_times = self.get_judging_times()
 
@@ -172,7 +173,7 @@ class Schedule:
                       duration=self.config.nminutes_judging,
                       team=teamid)
             )
-            print(f"Assigned Project Judging: Team {teamid} at {t} in {room}")
+            # print(f"Assigned Project Judging: Team {teamid} at {t} in {room}")
 
         # add design judging rooms
         judge_times_all = judge_times * self.config.ndesign_rooms
@@ -185,7 +186,7 @@ class Schedule:
                       duration=self.config.nminutes_judging,
                       team=teamid)
             )
-            print(f"Assigned Robot Design Judging: Team {teamid} at {t} in {room}")
+            # print(f"Assigned Robot Design Judging: Team {teamid} at {t} in {room}")
 
         return robot_design_judge_order, project_judge_order
     
@@ -214,5 +215,33 @@ class Schedule:
                           duration=(self.config.nminutes_table_rnd1 if round_num == 0 else self.config.nminutes_table_allrounds),
                           team=teamid)
                 )
-                print(f"Assigned Table Round {round_num + 1}: Team {teamid} at {t} on Table {table}")
-        pass
+                # print(f"Assigned Table Round {round_num + 1}: Team {teamid} at {t} on Table {table}")
+        
+    def set_events_by_team(self):
+        for event in self.events:
+            # time, title, room, duration, team
+            if event.team == -1:
+                continue
+            if event.team not in self.events_by_team:
+                self.events_by_team[event.team] = {}
+            if "Table" in event.title:
+                round_no = int(event.title.split()[-1])
+                self.events_by_team[event.team][f"Round {round_no}"] = (event.time, event.room)
+            elif "Judging" in event.title:
+                if "Project" in event.title:
+                    self.events_by_team[event.team]["P"] = (event.time, event.room)
+                elif "Robot Design" in event.title:
+                    self.events_by_team[event.team]["RD"] = (event.time, event.room)
+        return self.events_by_team
+
+    def validate_schedule(self):
+        # make sure all teams have different opponents for each round
+
+
+        # make sure all teams see as many tables as possible
+        # ASSUMES 2 TABLES ONLY FOR NOW. 
+
+        # Make sure teams have no overlapping events. 
+
+
+        return True
