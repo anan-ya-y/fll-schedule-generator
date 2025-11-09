@@ -39,11 +39,11 @@ def create_team_schedule(schedule):
         for teamno in teamnos:
             team = schedule.events_by_team[teamno]
             teamname = f"Team {teamno}"
-            r1_time, r1_table = team["Round 1"]
-            r2_time, r2_table = team["Round 2"]
-            r3_time, r3_table = team["Round 3"]
-            project_time, project_room = team["P"]
-            design_time, design_room = team["RD"]
+            r1_time, r1_table, _ = team["Round 1"]
+            r2_time, r2_table, _ = team["Round 2"]
+            r3_time, r3_table, _ = team["Round 3"]
+            project_time, project_room, _ = team["P"]
+            design_time, design_room, _ = team["RD"]
 
             t.add_row((teamno,
                        teamname,

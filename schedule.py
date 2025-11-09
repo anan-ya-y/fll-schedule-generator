@@ -226,22 +226,67 @@ class Schedule:
                 self.events_by_team[event.team] = {}
             if "Table" in event.title:
                 round_no = int(event.title.split()[-1])
-                self.events_by_team[event.team][f"Round {round_no}"] = (event.time, event.room)
+                self.events_by_team[event.team][f"Round {round_no}"] = (event.time, event.room, event.duration)
             elif "Judging" in event.title:
                 if "Project" in event.title:
-                    self.events_by_team[event.team]["P"] = (event.time, event.room)
+                    self.events_by_team[event.team]["P"] = (event.time, event.room, event.duration)
                 elif "Robot Design" in event.title:
-                    self.events_by_team[event.team]["RD"] = (event.time, event.room)
+                    self.events_by_team[event.team]["RD"] = (event.time, event.room, event.duration)
         return self.events_by_team
+    
+    def get_table_events(self):
+        table_events = {} # time: (Team1, team2)
+        for event in self.events:
+            if "Table" in event.title:
+                if event.time not in table_events:
+                    table_events[event.time] = []
+                table_events[event.time].append(event.team)
+        return table_events
+
+    # in: list of events [(time, duration), ...]
+    # out True if any overlap. False otherwise
+    def times_overlap(self, events):
+        times_list = [(k[0], TimeUtils.add_times(k[0], k[1])) for k in events]
+        times_list.sort(key = lambda x: x[0]) # sort by start time
+        for i in range(1, len(times_list)):
+            prev_end = times_list[i-1][1]
+            curr_start = times_list[i][0]
+            if curr_start < prev_end:
+                return True
+        return False
 
     def validate_schedule(self):
-        # make sure all teams have different opponents for each round
+        self.set_events_by_team()
+        # Make sure teams have no overlapping events. 
+        for teamno, teamevents in self.events_by_team.items():
+            times = [(k[0], k[2]) for k in teamevents.values()] # (time, duration)
+            if self.times_overlap(times):
+                return False
 
-
+        print("no overlaps!!")
         # make sure all teams see as many tables as possible
         # ASSUMES 2 TABLES ONLY FOR NOW. 
+        for teamevents in self.events_by_team.values():
+            r1_table = teamevents["Round 1"][1]
+            r2_table = teamevents["Round 2"][1]
+            r3_table = teamevents["Round 3"][1]
+            if len(set([r1_table, r2_table, r3_table])) < min(self.config.ntables, 3):
+                return False
 
-        # Make sure teams have no overlapping events. 
+        # make sure all teams have different opponents for each round
+        table_events = self.get_table_events()
+        team_opponents = {} # teamno: [opponents]
+        for time, teamnos in table_events.items():
+            a, b = teamnos[0], teamnos[1]
+            if a not in team_opponents:
+                team_opponents[a] = []
+            if b not in team_opponents:
+                team_opponents[b] = []
+            team_opponents[a].append(b)
+            team_opponents[b].append(a)
 
+        for team, opponents in team_opponents.items():
+            if len(opponents) != len(set(opponents)):
+                return False
 
         return True
