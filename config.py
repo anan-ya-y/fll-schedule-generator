@@ -1,14 +1,16 @@
 from datetime import datetime, timedelta
+import numpy as np
 
 class Config:
     def __init__(self):
+        self.seed = 2025
         self.nproject_rooms = 2
         self.ndesign_rooms = 2
         self.ntables = 2
         self.ntable_rounds = 3
         self.match_break_duration = 10
 
-        self.nteams = 20
+        self.nteams = 16
 
         self.nminutes_judging = 10
         self.nminutes_between_judging = 10
@@ -17,7 +19,7 @@ class Config:
         self.lunch_start = "12:00"
         self.nminutes_lunch = 45
 
-        self.nminutes_table_rnd1 = 10
+        self.nminutes_table_rnd1 = 8
         self.nminutes_table_allrounds = 8
 
         self.day_start_time = "9:00"
@@ -29,6 +31,7 @@ class Config:
         self.closing_ceremony_duration = 45
 
         self.process()
+        np.random.seed(self.seed)
 
     def process(self):
         self.day_start_time = datetime.strptime(self.day_start_time, "%H:%M").time()

@@ -13,13 +13,15 @@ match_times = s.get_match_times()
 all_times = judge_times + match_times
 all_times.sort()
 
-
-# for i in all_times:
-#     print(f"{i}: {"J" if i in judge_times else " "} {"M" if i in match_times else " "}")
-
 s.set_judge_teams(judge_times, ["P1", "P2"], ["D1", "D2"])
 
 s.set_matches(match_times)
+i = 0
+while not s.validate_schedule():
+    if i % 100 == 0:
+        print("Schedule invalid, regenerating matches...")
+    i += 1
+    s.set_matches(match_times)
 
 s.set_events_by_team()
 
