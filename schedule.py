@@ -1,292 +1,411 @@
-from datetime import datetime as dt
-import datetime
+from utils import TimeUtils, Event
 import numpy as np
+import pandas as pd
 
-class TimeUtils:
-    @staticmethod
-    def add_times(time, td):
-        if type(td) is int:
-            td = datetime.timedelta(minutes=td)
-            full_datetime = datetime.datetime.combine(datetime.datetime.today(), time) + td
-            return full_datetime.time()
-        if type(td) is datetime.time:
-            full_datetime = datetime.datetime.combine(datetime.datetime.today(), time) + datetime.timedelta(hours=td.hour, minutes=td.minute, seconds=td.second)
-            return full_datetime.time()
-        raise ValueError("td must be int or datetime.time")
-
-    @staticmethod
-    def subtract_times(time, td):
-        if type(td) is int:
-            td = datetime.timedelta(minutes=td)
-            full_datetime = datetime.datetime.combine(datetime.datetime.today(), time) - td
-            return full_datetime.time()
-        if type(td) is datetime.time:
-            full_datetime = datetime.datetime.combine(datetime.datetime.today(), time) - datetime.timedelta(hours=td.hour, minutes=td.minute, seconds=td.second)
-            return full_datetime.time()
-        raise ValueError("td must be int or datetime.time")
-    
-    @staticmethod
-    def is_during_lunch(lunch_start, lunch_duration, time):
-        # if time is before lunch_start
-        if datetime.datetime.combine(datetime.datetime.today(), time) < datetime.datetime.combine(datetime.datetime.today(), lunch_start):
-            return False
-
-        difference = TimeUtils.subtract_times(time, lunch_start)
-        difference = difference.hour * 60 + difference.minute
-        return difference < lunch_duration
-
-class Event:
-    def __init__(self, time, title, room, duration, team=-1):
-        self.time = time
-        self.title = title
-        self.room = room
-        self.duration = duration
-        self.team = team
-        
-    def __str__(self):
-        team_str = f" for Team {self.team}" if self.team != -1 else ""
-        return f"{self.time} - {self.title} in {self.room} for {self.duration} minutes{team_str}"
-
-class Schedule:
-    def __init__(self, config):
+class Tournament:
+    def __init__(self, config, verbose=True, veryverbose=False):
         self.config = config
-        self.events = []
-        self.events_by_team = {} # team : {round 1: (time, roomno), ...}
+        self.verbose = verbose
+        self.veryverbose = veryverbose
+        if self.veryverbose:
+            self.verbose = True
 
-        self.judging_times = self.get_judging_times()
 
-        self.create_opening_ceremonies()
-        self.create_closing_ceremonies()
+        self.events = pd.DataFrame(columns=[
+            "Time", "EventName", "RoundNo", "Room", "Duration", "Team"
+        ])
+        # EventName = "Project", "Design", "Table", "Opening/Closing/etc"
+        # RoundNo = 0 if not a table round, else 1, 2, or 3
 
-    def create_opening_ceremonies(self):
-        self.events.append(
-            Event(time=self.config.day_start_time,
-                  title="Opening Ceremonies",
-                  room="OPENING CEREMONIES ROOM",
-                  duration=self.config.opening_ceremony_duration,
-                  team=-1)
-        )
 
-    def create_closing_ceremonies(self):
-        self.events.append(
-            Event(time=self.config.closing_ceremony_time,
-                  title="Closing Ceremonies",
-                  room="CLOSING CEREMONIES ROOM",
-                  duration=self.config.closing_ceremony_duration,
-                  team=-1)
-        )
 
-    def create_lunch(self):
-        self.events.append(
-            Event(time=self.config.lunch_start,
-                  title="Lunch",
-                  room="LUNCH ROOM",
-                  duration=self.config.nminutes_lunch,
-                  team=-1)
-        )
+        # self.events = [] # All events in the tournament
+        # self.events_by_team = {} # {teamno : [Events]}
+        self.nteams = self.config.tournament.nteams
+        self.teamid_keys = [k for k in range(1, 1 + self.nteams)]
 
-    def __str__(self):
-        s = ""
-        for event in self.events:
-            s += f"{event.time} - {event.title} in {event.room} for {event.duration} minutes\n"
+        self.lunch_start = self.config.day.lunch_start
+        self.lunch_end = self.config.day.lunch_end
 
-        return s
+        # Strategy: Create a template of events. 
+        # Then, assign teams by distance. 
+        self.get_judging_times()
+        self.get_match_times()
+        
+        # Strategy for template:
+        # 1. Fix the Judging rounds
+        self.assign_judging()
 
+        # 2. Fix the Match rounds
+        self.assign_all_matches()
+        
+        # 3. Verify the schedule (assign_all_matches already does this, but JUUST IN CASE)
+        self.veryverbose = True
+        valid_schedule = self.verify_schedule() 
+
+        # When a team is found, save the template. 
+        # Then, create a way for us to insert the template file into the constructor. 
+        # Fill in teams by distance/latest judging order. 
+
+    # Returns the judging slots. 
     def get_judging_times(self):
-        judging_start_time = TimeUtils.add_times(self.config.day_start_time, self.config.opening_ceremony_duration + self.config.day_prep_time)
+        judging_start_time = TimeUtils.add_times( 
+            self.config.day.opening_ceremony_end_time,
+            self.config.day.judging_prep 
+        )
+        
+        # Number of judging slots required. 
+        total_judging_rooms = self.config.tournament.nproject_rooms + \
+                                self.config.tournament.ndesign_rooms
+        n_judging_slots = np.ceil((self.config.tournament.nteams * 2) / total_judging_rooms).astype(int)
 
-        # number of judging slots required:
-        njudging_slots = (self.config.nteams * 2) / (self.config.nproject_rooms + self.config.ndesign_rooms)
-        njudging_slots = int(np.ceil(njudging_slots))
-
-        next_judging_time = judging_start_time
         judging_times = []
-        for i in range(1, 1+njudging_slots):
-            judge_start_time = next_judging_time
-            judging_times.append(judge_start_time)
+        next_judging_time = judging_start_time
+        # create the list of judging times. 
+        for i in range(1, 1 + n_judging_slots):
+            start_time = next_judging_time
+            judging_times.append(start_time)
 
-            next_judging_time = TimeUtils.add_times(next_judging_time, self.config.nminutes_judging + self.config.nminutes_between_judging)
+            total_slot_length = self.config.judging.nminutes_judging + \
+                                self.config.judging.nminutes_between_judging
+            next_judging_time = TimeUtils.add_times(next_judging_time, total_slot_length)
 
-            if i % self.config.nteams_per_judging_sprint == 0:
-                next_judging_time = TimeUtils.add_times(next_judging_time, 15)
+            if i % self.config.judging.nteams_per_judging_sprint == 0:
+                next_judging_time = TimeUtils.add_times(
+                    next_judging_time,
+                    self.config.judging.nminutes_between_judging
+                )
 
-            # make sure no judging runs through lunch
-            lunch_end_time = TimeUtils.add_times(self.config.lunch_start, self.config.nminutes_lunch)
-            if TimeUtils.is_during_lunch(self.config.lunch_start, self.config.nminutes_lunch, judge_start_time) or \
-                TimeUtils.is_during_lunch(self.config.lunch_start, self.config.nminutes_lunch, next_judging_time):
-                next_judging_time = lunch_end_time
+            # # Make sure no judging runs through lunch
+            if TimeUtils.contains_overlap([(self.lunch_start, self.config.day.nminutes_lunch),
+                                           (next_judging_time, self.config.judging.nminutes_judging)]):
+                next_judging_time = self.lunch_end
 
-        return judging_times
-    
-    # (round 1 times, round 2 times, ..)
-    # ASSUMES 1 SET OF TABLES... 
+        # Add judging times to self.events
+        judging_events = []
+        for j_time in judging_times:
+            # design rooms
+            for design_room in self.config.tournament.design_room_names:
+                judging_events.append({
+                    "Time": j_time,
+                    "EventName": "Design",
+                    "RoundNo": 0,
+                    "Room": design_room,
+                    "Duration": self.config.judging.nminutes_judging,
+                    "Team": -1
+                })
+
+            # project rooms
+            for project_room in self.config.tournament.project_room_names:
+                judging_events.append({
+                    "Time": j_time,
+                    "EventName": "Project",
+                    "RoundNo": 0,
+                    "Room": project_room,
+                    "Duration": self.config.judging.nminutes_judging,
+                    "Team": -1
+                })
+        self.events = pd.concat([self.events, pd.DataFrame(judging_events)], ignore_index=True)
+
+    # Create judging assignments - update self.events and self.events_by_team
+    def assign_judging(self, shuffle_teams=False):
+        self.clear_judging_events()
+
+        project_design_events = self.events[self.events["EventName"].isin(["Project", "Design"])]
+        pd_events_sorted = project_design_events.sort_values(by=["EventName", "Room", "Time"], ascending=True)
+        # ^ this particular order ["Room", "Time"] puts back to back times for the same room
+        # looks like:
+        # 0   09:45:00    Design       0  DR1       10   -1
+        # 4   10:05:00    Design       0  DR1       10   -1
+        # 8   10:25:00    Design       0  DR1       10   -1
+        # 12  10:55:00    Design       0  DR1       10   -1
+        # ...
+
+        teamnos = self.teamid_keys.copy()
+        if shuffle_teams:
+            np.random.shuffle(teamnos)
+
+        # Assign the teams to the first judging (design?) event as is (sorted by room/time)
+        teamlist = teamnos.copy()
+        # Do some math for the second event (project?) - depends on how "EventName" is sorted
+        # first rooms were [1 11] [2 12] [3 13]... [10 20] if 20 teams. 
+        # second rooms should be [5 15] [6 16] [7 17]... [4 14] if 20 teams.
+        rooms = np.array(teamnos)
+        rooms = rooms.reshape((self.config.tournament.njudging_rooms, -1))
+        rooms = np.hstack((rooms[:, len(rooms[1])//2:], rooms[:, :len(rooms[1])//2])).reshape(-1)
+        # ^ yes, there is basically magic happening here. Sorry, future me. 
+
+        teamlist = teamlist + list(rooms)
+        assert len(teamlist) == len(pd_events_sorted), "Team assignment length mismatch!"
+        pd_events_sorted["Team"] = teamlist
+
+        # Update self.events
+        self.events.update(pd_events_sorted)
+
+    # Create match times. 
     def get_match_times(self):
-        nrounds = self.config.ntable_rounds
+        nrounds = self.config.tournament.ntable_rounds
+        nmatches_per_round = np.ceil(self.nteams / self.config.tournament.ntables).astype(int)
 
-        nmatches_per_round = self.config.nteams // self.config.ntables
+        match_events = []
+        round_no = 1
+        next_match_time = self.config.day.matches_start_time
+        for i in range(1, 1 + (nmatches_per_round * nrounds)):
+            start_time = next_match_time 
+            match_duration = self.config.table.nminutes_table_rnd1 if round_no == 1 else \
+                             self.config.table.nminutes_table_allrounds
+            # create events for all tables at this time
+            for tableno in range(1, 1 + self.config.tournament.ntables):
+                match_events.append({
+                    "Time": start_time,
+                    "EventName": f"Table",
+                    "RoundNo": round_no,
+                    "Room": f"Table {tableno}",
+                    "Duration": match_duration,
+                    "Team": -1
+                })
 
-        round_times = []
+            next_match_time = TimeUtils.add_times(
+                next_match_time,
+                match_duration
+            )
 
-        round_num = 1
-        next_match_time = self.config.matches_start_time
-        for i in range(1, 1+nmatches_per_round * nrounds):
-            if round_num == 1:
-                duration = self.config.nminutes_table_rnd1
-            else:
-                duration = self.config.nminutes_table_allrounds
-
-            match_start_time = next_match_time
-            round_times.append(match_start_time)
-
-            next_match_time = TimeUtils.add_times(match_start_time, duration)
-
-            # make sure no matches run through lunch
-            lunch_end_time = TimeUtils.add_times(self.config.lunch_start, self.config.nminutes_lunch)
-            if TimeUtils.is_during_lunch(self.config.lunch_start, self.config.nminutes_lunch, match_start_time) or \
-                TimeUtils.is_during_lunch(self.config.lunch_start, self.config.nminutes_lunch, next_match_time):
-                next_match_time = lunch_end_time
+            # make sure nothing runs through lunch
+            if TimeUtils.contains_overlap([(self.lunch_start, self.config.day.nminutes_lunch),
+                                           (next_match_time, match_duration)]):
+                next_match_time = self.lunch_end
 
             if i % nmatches_per_round == 0:
-                round_num += 1
-                # add break
-                next_match_time = TimeUtils.add_times(next_match_time, self.config.match_break_duration)
-                               
-        return round_times
-
-    def set_judge_teams(self, judge_times, project_rooms, design_rooms):
-        team_ids = np.array(list(range(1, self.config.nteams + 1)))
-
-        robot_design_judge_order = np.reshape(team_ids, (self.config.ndesign_rooms, -1))
-        half_teams = robot_design_judge_order.shape[1] // 2
-        project_judge_order = np.hstack((robot_design_judge_order[:, half_teams:], 
-                                    robot_design_judge_order[:, :half_teams]))
-        njudging_slots = robot_design_judge_order.shape[1]
-        
-        # Add project judging rooms 
-        judge_times_all = judge_times * self.config.nproject_rooms
-        project_rooms_all = np.array([[p] * njudging_slots for p in project_rooms]).flatten()
-        for t, teamid, room in zip(judge_times_all, project_judge_order.flatten(), project_rooms_all):
-            self.events.append(
-                Event(time=t,
-                      title="Project Judging",
-                      room=room,
-                      duration=self.config.nminutes_judging,
-                      team=teamid)
-            )
-            # print(f"Assigned Project Judging: Team {teamid} at {t} in {room}")
-
-        # add design judging rooms
-        judge_times_all = judge_times * self.config.ndesign_rooms
-        design_rooms_all = np.array([[d] * njudging_slots for d in design_rooms]).flatten()
-        for t, teamid, room in zip(judge_times_all, robot_design_judge_order.flatten(), design_rooms_all):
-            self.events.append(
-                Event(time=t,
-                      title="Robot Design Judging",
-                      room=room,
-                      duration=self.config.nminutes_judging,
-                      team=teamid)
-            )
-            # print(f"Assigned Robot Design Judging: Team {teamid} at {t} in {room}")
-
-        return robot_design_judge_order, project_judge_order
-    
-    def set_matches(self, match_times):
-        team_ids = np.array(list(range(1, self.config.nteams + 1)))
-        rounds = []
-
-        match_times_round = np.array(match_times).reshape((self.config.ntable_rounds, -1))
-
-        for round in range(self.config.ntable_rounds):
-            round_contents = np.random.permutation(team_ids)
-            rounds.append(round_contents)
-
-        # Add matches to self.events. 
-        for round_num in range(self.config.ntable_rounds):
-            match_times_all = [[k] * self.config.ntables for k in match_times_round[round_num]]
-            match_times_all = np.array(match_times_all).flatten()
-            team_ids_all = rounds[round_num]
-            tables_all = list(range(1, self.config.ntables+1)) * (len(team_ids_all) // self.config.ntables)
-
-            for t, teamid, table in zip(match_times_all, team_ids_all, tables_all):
-                self.events.append(
-                    Event(time=t,
-                          title=f"Table Round {round_num + 1}",
-                          room=f"Table {table}",
-                          duration=(self.config.nminutes_table_rnd1 if round_num == 0 else self.config.nminutes_table_allrounds),
-                          team=teamid)
+                round_no += 1
+                # Add a break
+                next_match_time = TimeUtils.add_times(
+                    next_match_time,
+                    self.config.table.match_break_duration
                 )
-                # print(f"Assigned Table Round {round_num + 1}: Team {teamid} at {t} on Table {table}")
-        
-    def set_events_by_team(self):
-        for event in self.events:
-            # time, title, room, duration, team
-            if event.team == -1:
-                continue
-            if event.team not in self.events_by_team:
-                self.events_by_team[event.team] = {}
-            if "Table" in event.title:
-                round_no = int(event.title.split()[-1])
-                self.events_by_team[event.team][f"Round {round_no}"] = (event.time, event.room, event.duration)
-            elif "Judging" in event.title:
-                if "Project" in event.title:
-                    self.events_by_team[event.team]["P"] = (event.time, event.room, event.duration)
-                elif "Robot Design" in event.title:
-                    self.events_by_team[event.team]["RD"] = (event.time, event.room, event.duration)
-        return self.events_by_team
-    
-    def get_table_events(self):
-        table_events = {} # time: (Team1, team2)
-        for event in self.events:
-            if "Table" in event.title:
-                if event.time not in table_events:
-                    table_events[event.time] = []
-                table_events[event.time].append(event.team)
-        return table_events
 
-    # in: list of events [(time, duration), ...]
-    # out True if any overlap. False otherwise
-    def times_overlap(self, events):
-        times_list = [(k[0], TimeUtils.add_times(k[0], k[1])) for k in events]
-        times_list.sort(key = lambda x: x[0]) # sort by start time
-        for i in range(1, len(times_list)):
-            prev_end = times_list[i-1][1]
-            curr_start = times_list[i][0]
-            if curr_start < prev_end:
+        self.events = pd.concat([self.events, pd.DataFrame(match_events)], ignore_index=True)
+
+    def assign_match_round(self, roundno):
+        self.clear_table_events(roundno)
+
+        table_events = self.events[self.events["RoundNo"] == roundno]
+
+        teamnos = self.teamid_keys.copy()
+        np.random.shuffle(teamnos)
+
+        assert len(teamnos) == len(table_events), "Team assignment length mismatch!"
+
+        table_events.loc[:, "Team"] = teamnos
+
+        # Update self.events
+        self.events.update(table_events)
+
+    def assign_all_matches(self, max_startovers=1000, max_r1 = 1e5, max_r2 = 4e5, max_r3=16e5):
+        for m in range(max_startovers):
+            print(f"STARTING MATCH ASSIGNMENT ATTEMPT {m}..")
+            # Try round 1
+            for i in range(int(max_r1)):
+                self.assign_match_round(1)
+                if self.verbose and i%1000 == 0:
+                    print(f"  Trying round 1 assignment attempt {i}...")
+                if self.verify_schedule(check_opponents=False, check_table_diversity=False):
+                    break
+
+            if self.verify_schedule(check_opponents=False, check_table_diversity=False):
+                if self.verbose:
+                    print("FOUND ROUND 1 ASSIGNMENT AFTER ", i, "ATTEMPTS")
+            else:
+                continue
+
+            # Try round 2
+            for i in range(int(max_r2)):
+                self.assign_match_round(2)
+                if self.verbose and i%1000 == 0:
+                    print(f"  Trying round 2 assignment attempt {i}...")
+                if self.verify_schedule(check_opponents=True, check_table_diversity=False):
+                    break
+
+            if self.verify_schedule(check_opponents=True, check_table_diversity=False):
+                if self.verbose:
+                    print("FOUND ROUND 2 ASSIGNMENT AFTER ", i, "ATTEMPTS")
+            else:
+                continue
+
+            # Try round 3
+            for i in range(int(max_r3)):
+                print("GENERATING ROUND 3 ATTEMPT ", i)
+                self.assign_match_round(3)
+                if self.verbose and i%1000 == 0:
+                    print(f"  Trying round 3 assignment attempt {i}...")
+                if self.verify_schedule(check_opponents=True, check_table_diversity=True):
+                    break
+            
+            if self.verbose:
+                print("FOUND ROUND 3 ASSIGNMENT AFTER ", i, "ATTEMPTS")
                 return True
         return False
 
-    def validate_schedule(self):
-        self.set_events_by_team()
-        # Make sure teams have no overlapping events. 
-        for teamno, teamevents in self.events_by_team.items():
-            times = [(k[0], k[2]) for k in teamevents.values()] # (time, duration)
-            if self.times_overlap(times):
+    #################################################
+    ################### UTILITIES ###################
+    #################################################
+    # remove all judging events from self.events and self.events_by_team
+    def clear_judging_events(self):
+        # change the teamno of these columns to -1
+        self.events.loc[self.events["EventName"].isin(["Project", "Design"]), "Team"] = -1
+
+    # Remove all table events from self.events and self.events_by_team
+    # roundno = -1 means all rounds
+    def clear_table_events(self, roundno=-1):
+        if roundno == -1:
+            self.events.loc[self.events["RoundNo"] != 0, "Team"] = -1
+        else:
+            self.events.loc[self.events["RoundNo"] == roundno, "Team"] = -1
+
+    # To get a specific team, do this.get_group(teamno)
+    def get_events_by_team(self):
+        self.events = self.events.sort_values(by="Time", ascending=True)
+        return self.events.groupby(by="Team")
+    
+    def get_team_events_interval_list(self, teamno):
+        df = self.get_events_by_team().get_group(teamno)
+        df_td = df[["Time", "Duration"]]
+        df_tuples = df_td.apply(lambda x: (x['Time'], x['Duration']), axis=1)
+        return df_tuples.tolist()
+    
+    ##############################################################
+    ################### VERIFICATION FUNCTIONS ###################
+    ##############################################################
+
+    # check_opponents: check that teams have different opponents each round
+    # check_table_diversity: check that teams see as many different tables as possible
+    def verify_schedule(self, check_opponents = True, check_table_diversity = True):
+        # Verify all teams have all events!!
+        # Verify no overlaps for teams
+        no_overlaps = self.verify_no_team_overlaps()
+        if not no_overlaps:
+            if self.veryverbose:
+                print("Schedule verification failed: team overlaps found.")
+            return False
+
+        # Verify "gap" between events is >= whatever config says
+        gap_ok, fail_team = self.verify_event_gap()
+        if not gap_ok:
+            if self.veryverbose:
+                print(f"Schedule verification failed: team {fail_team} has insufficient gap between events.")
+            return False
+        
+        # Make sure all teams have different opponents for each table round
+        if check_opponents:
+            opps = self.verify_opponent_diversity()
+            if not opps:
+                if self.veryverbose:
+                    print("Schedule verification failed: teams have repeated opponents.")
                 return False
+        
+        # Make sure all teams see as many tables as possible.
+        if check_table_diversity:
+            for i in range(25):
+                table_div = self.verify_table_diversity()
+                if table_div == -1:
+                    break
+                print("Just found broken team:", table_div)
+                if self.veryverbose:
+                    print(f"Schedule verification: team {table_div} doesn't see enough tables. Attempting to fix...")
 
-        print("no overlaps!!")
-        # make sure all teams see as many tables as possible
-        # ASSUMES 2 TABLES ONLY FOR NOW. 
-        for teamevents in self.events_by_team.values():
-            r1_table = teamevents["Round 1"][1]
-            r2_table = teamevents["Round 2"][1]
-            r3_table = teamevents["Round 3"][1]
-            if len(set([r1_table, r2_table, r3_table])) < min(self.config.ntables, 3):
+                self.fix_table_diversity(table_div)
+
+            if table_div != -1:
+                return False # We failed to fix the table diversity issue.
+
+
+        # All checks passed!!
+        return True 
+
+    def verify_no_team_overlaps(self):
+        for teamno in self.teamid_keys:
+            # Create list of (start_time, duration) tuples
+            time_blocks = self.get_team_events_interval_list(teamno)
+            # Check for overlaps
+            if TimeUtils.contains_overlap(time_blocks):
+                if self.veryverbose:
+                    print(f"Team {teamno} has overlapping events.")
                 return False
-
-        # make sure all teams have different opponents for each round
-        table_events = self.get_table_events()
-        team_opponents = {} # teamno: [opponents]
-        for time, teamnos in table_events.items():
-            a, b = teamnos[0], teamnos[1]
-            if a not in team_opponents:
-                team_opponents[a] = []
-            if b not in team_opponents:
-                team_opponents[b] = []
-            team_opponents[a].append(b)
-            team_opponents[b].append(a)
-
-        for team, opponents in team_opponents.items():
-            if len(opponents) != len(set(opponents)):
-                return False
-
         return True
+    
+    def verify_event_gap(self):
+        for teamno in self.teamid_keys:
+            time_blocks = self.get_team_events_interval_list(teamno)
+            # Sort by start time
+            time_blocks.sort(key=lambda x: x[0])
+            for i in range(1, len(time_blocks)):
+                prev_end = TimeUtils.add_times(time_blocks[i - 1][0], time_blocks[i - 1][1])
+                curr_start = time_blocks[i][0]
+                gap = TimeUtils.subtract_times(curr_start, prev_end)
+                if gap < self.config.team.time_between_events:
+                    if self.veryverbose:
+                        print(f"Team {teamno} has insufficient gap between events.")
+                    return False, teamno
+                
+        return True, -1
+    
+    def verify_opponent_diversity(self):
+        tablerounds = self.events[(self.events["RoundNo"] != 0) & (self.events["Team"] != -1)]
+        match_groups = tablerounds.groupby(by=["Time"])
+        match_tuples = (match_groups["Team"]).apply(lambda x: tuple(sorted(x)))
+        if len(set(match_tuples)) != len(match_tuples):
+            return False
+        return True
+
+    def see_unique_tables(self, teamno):
+        tablerounds = self.events[(self.events["RoundNo"] != 0) & (self.events["Team"] != -1)]
+        team_groups = tablerounds.groupby(by=["Team"])
+        team_rounds = team_groups.get_group((teamno, ))
+        tables_seen = team_rounds["Room"].unique()
+        return len(tables_seen) == min(self.config.tournament.ntable_rounds, self.config.tournament.ntables)
+
+    def verify_table_diversity(self):
+        for team in self.teamid_keys:
+            if not self.see_unique_tables(team):
+                if self.veryverbose:
+                    print(f"Team {team} has insufficient table diversity.")
+                return team
+        return -1
+    
+    def fix_table_diversity(self, teamno):
+        # Find this team's table rounds and their opponents
+        tablerounds = self.events[(self.events["RoundNo"] != 0) & (self.events["Team"] == teamno)]
+        tabletimes = tablerounds["Time"].values
+        teams_we_care_about = self.events[(self.events["RoundNo"] != 0) & \
+                                (self.events["Time"].isin(tabletimes))]["Team"].unique().tolist()
+        print(tablerounds)
+        
+        # swap round 1 opponent and see if it fixes the problem
+        for round in range(1, 4):
+            round_time = tablerounds[tablerounds["RoundNo"] == round]["Time"]
+            round_match = self.events[(self.events["Time"] == round_time.values[0]) & \
+                                       (self.events["RoundNo"] == round)]
+            round_match.loc[:, "Team"] = round_match["Team"][::-1].values
+            self.events.update(round_match)
+
+            # check if the 4 teams we are messing with have been fixed
+            fixed = True
+            for team in teams_we_care_about:
+                fixed &= self.see_unique_tables(team)
+                print(team, fixed)
+            print("FIXED?", fixed)
+
+            # swap back if it didn't fix
+            if not fixed:
+                round_match.loc[:, "Team"] = round_match["Team"][::-1].values
+                self.events.update(round_match)
+            else:
+                print("FIXED!, swapped round ", round)
+                return 
+            
+    # save the df to a csv
+    def save_schedule_csv(self, filename):
+        self.events.to_csv(filename, index=False)
+
+    # get from csv
+    def load_schedule_csv(self, filename):
+        self.events = pd.read_csv(filename)
