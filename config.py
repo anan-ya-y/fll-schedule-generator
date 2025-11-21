@@ -33,8 +33,8 @@ class Config:
 
         # DAY CONFIGURATION
         self.day = SubConfig()
-        self.day.lunch_start = "12:00"
-        self.day.nminutes_lunch = 10
+        self.day.lunch_start = "11:55"
+        self.day.nminutes_lunch = 40
         self.day.start_time = "9:00"
         self.day.opening_ceremony_duration = 20
         self.day.matches_start_time = "9:35"
@@ -56,7 +56,7 @@ class Config:
         self.day.lunch_start = datetime.strptime(self.day.lunch_start, "%H:%M").time()
         self.day.closing_ceremony_time = datetime.strptime(self.day.closing_ceremony_time, "%H:%M").time()
         self.day.matches_start_time = datetime.strptime(self.day.matches_start_time, "%H:%M").time()
-        self.day.opening_ceremony_end_time = TimeUtils.add_minutes_to_time(self.day.start_time, self.day.opening_ceremony_duration)
+        self.day.opening_ceremony_end_time = TimeUtils.add_times(self.day.start_time, self.day.opening_ceremony_duration)
 
         self.team.teamlist_file = "teamlist.csv"
         # read csv, turn it into df
@@ -68,4 +68,5 @@ class Config:
         self.team.teamnos_to_distances = {row["Team Number"]: row["Distance"] for _, row in self.team.teamlist.iterrows()}
 
         assert len(self.team.teamnames) == self.tournament.nteams, "Number of teams in teamlist does not match nteams in config."
-    
+
+        self.day.lunch_end = TimeUtils.add_times(self.day.lunch_start, self.day.nminutes_lunch)    
