@@ -124,7 +124,7 @@ class Tournament:
         rooms = np.array(teamnos)
         rooms = rooms.reshape((self.config.tournament.njudging_rooms, -1))
         rooms = np.hstack((rooms[:, len(rooms[1])//2:], rooms[:, :len(rooms[1])//2])).reshape(-1)
-        # ^ yes, there is basically magic happening here :)
+        # ^ yes, there is basically magic happening here. Sorry, future me. 
 
         teamlist = teamlist + list(rooms)
         assert len(teamlist) == len(pd_events_sorted), "Team assignment length mismatch!"
@@ -132,6 +132,10 @@ class Tournament:
 
         # Update self.events
         self.events.update(pd_events_sorted)
+
+    # Create match times. 
+    def get_match_times(self):
+        pass
 
     #################################################
     ################### UTILITIES ###################
@@ -149,6 +153,7 @@ class Tournament:
         else:
             self.events = self.events[self.events["RoundNo"] != roundno]
 
+    # To get a specific team, do this.get_group(teamno)
     def get_events_by_team(self):
         self.events = self.events.sort_values(by="Time", ascending=True)
         return self.events.groupby(by="Team")
