@@ -45,7 +45,7 @@ class Config:
 
         # DAY CONFIGURATION
         self.day = SubConfig()
-        self.day.lunch_start = "11:55"
+        self.day.lunch_start = "12:00"
         self.day.nminutes_lunch = 40
         self.day.start_time = "9:00"
         self.day.opening_ceremony_duration = 20

@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 class Tournament:
-    def __init__(self, config, verbose=True, veryverbose=False, csvfile=None):
+    def __init__(self, config, verbose=True, veryverbose=False, csvfile=None, strategy_randomize="judging"):
         self.config = config
         self.verbose = verbose
         self.veryverbose = veryverbose
@@ -13,6 +13,8 @@ class Tournament:
         if csvfile is not None:
             self.load_schedule_csv(csvfile)
             return
+        
+        self.strategy_randomize = strategy_randomize
 
 
         self.events = pd.DataFrame(columns=[
@@ -21,8 +23,6 @@ class Tournament:
         # EventName = "Project", "Design", "Table", "Opening/Closing/etc"
         # RoundNo = 0 if not a table round, else 1, 2, or 3
 
-        # self.events = [] # All events in the tournament
-        # self.events_by_team = {} # {teamno : [Events]}
         self.nteams = self.config.tournament.nteams
         self.teamid_keys = [k for k in range(1, 1 + self.nteams)]
 
@@ -33,14 +33,18 @@ class Tournament:
         # Then, assign teams by distance. 
         self.get_judging_times()
         self.get_match_times()
-        # breakpoint()
         
-        # Strategy for template:
-        self.assign_all_matches()
-        valid_schedule = self.verify_schedule(check_opponents=True, check_table_diversity=True)
-        assert valid_schedule, "Match schedule algorithm failed!!!"
+        if self.strategy_randomize == "judging":
+            self.assign_all_matches()
+            valid_schedule = self.verify_schedule(check_opponents=True, check_table_diversity=True)
+            assert valid_schedule, "Match schedule algorithm failed!!!"
+            self.assign_all_judging()
 
-        self.assign_all_judging()
+        else: # Randomize matches
+            self.assign_all_judging()
+            valid_schedule = self.verify_schedule(check_opponents=False, check_table_diversity=False)
+            assert valid_schedule, "Judging schedule algorithm failed!!!"
+            self.assign_all_matches()
 
         # 3. Verify the schedule (assign_all_matches already does this, but JUUST IN CASE)
         self.veryverbose = True
@@ -122,22 +126,57 @@ class Tournament:
         # Update self.events
         self.events.update(events_sorted)
 
-    def assign_all_judging(self, project_max_attempts=1e4, design_max_attempts=1e5):
-        for i in range(int(project_max_attempts)):
-            if i % 1000 == 0:
-                print(f"STARTING (project) JUDGING ASSIGNMENT ATTEMPT {i}...")
+    def assign_all_judging(self, project_max_attempts=1e5, design_max_attempts=1e5):
+        if self.strategy_randomize == "judging":
+            for i in range(int(project_max_attempts)):
+                if i % 1000 == 0:
+                    print(f"STARTING (project) JUDGING ASSIGNMENT ATTEMPT {i}...")
 
-            self.assign_judging("Project")
-            good_proj = self.verify_schedule()
-            if good_proj:
-                for j in range(int(design_max_attempts)):
-                    if j % 1000 == 0:
-                        print(f"  Trying design judging assignment attempt {j}...")
-                    self.assign_judging("Design")
-                    good_design = self.verify_schedule()
-                    if good_design:
-                        return True
-        return False
+                self.assign_judging("Project")
+                good_proj = self.verify_schedule()
+                if good_proj:
+                    for j in range(int(design_max_attempts)):
+                        if j % 1000 == 0:
+                            print(f"  Trying design judging assignment attempt {j}...")
+                        self.assign_judging("Design")
+                        good_design = self.verify_schedule()
+                        if good_design:
+                            return True
+            return False
+        
+        # Assign judging methodically. 
+
+        self.clear_judging_events("Project")
+        self.clear_judging_events("Design")
+
+        project_design_events = self.events[self.events["EventName"].isin(["Project", "Design"])]
+        pd_events_sorted = project_design_events.sort_values(by=["EventName", "Room", "Time"], ascending=True)
+        # ^ this particular order ["Room", "Time"] puts back to back times for the same room
+        # looks like:
+        # 0   09:45:00    Design       0  DR1       10   -1
+        # 4   10:05:00    Design       0  DR1       10   -1
+        # 8   10:25:00    Design       0  DR1       10   -1
+        # 12  10:55:00    Design       0  DR1       10   -1
+        # ...
+
+        teamnos = self.teamid_keys.copy()
+
+        # Assign the teams to the first judging (design?) event as is (sorted by room/time)
+        teamlist = teamnos.copy()
+        # Do some math for the second event (project?) - depends on how "EventName" is sorted
+        # first rooms were [1 11] [2 12] [3 13]... [10 20] if 20 teams. 
+        # second rooms should be [5 15] [6 16] [7 17]... [4 14] if 20 teams.
+        rooms = np.array(teamnos)
+        rooms = rooms.reshape((self.config.tournament.njudging_rooms, -1))
+        rooms = np.hstack((rooms[:, len(rooms[1])//2:], rooms[:, :len(rooms[1])//2])).reshape(-1)
+        # ^ yes, there is basically magic happening here. Sorry, future me. 
+
+        teamlist = teamlist + list(rooms)
+        assert len(teamlist) == len(pd_events_sorted), "Team assignment length mismatch!"
+        pd_events_sorted["Team"] = teamlist
+
+        # Update self.events
+        self.events.update(pd_events_sorted)
 
     # Create match times. 
     def get_match_times(self):
@@ -191,22 +230,25 @@ class Tournament:
         teamnos = self.teamid_keys.copy()
         # np.random.shuffle(teamnos)
 
-        if roundno == 2:
-            pass # keep as is
-        elif roundno == 1:
-            teamnos = [teamnos[-1]] + teamnos[:-1]  # shift by 1
-        elif roundno == 3:
-            new_teamnos = []
-            for i in range(len(teamnos)//4):
-                a, b, c, d = teamnos[4*i :4*i+4]
-                new_teamnos.extend([a,c, b, d])
-            new_teamnos.extend(teamnos[4*(len(teamnos)//4):]) # add remaining teams if not multiple of 4
+        if self.strategy_randomize == "matches":
+            np.random.shuffle(teamnos)
+        else: # methodical assignment of matches. 
+            if roundno == 2:
+                pass # keep as is
+            elif roundno == 1:
+                teamnos = [teamnos[-1]] + teamnos[:-1]  # shift by 1
+            elif roundno == 3:
+                new_teamnos = []
+                for i in range(len(teamnos)//4):
+                    a, b, c, d = teamnos[4*i :4*i+4]
+                    new_teamnos.extend([a,c, b, d])
+                new_teamnos.extend(teamnos[4*(len(teamnos)//4):]) # add remaining teams if not multiple of 4
 
-            if len(teamnos) % 4 != 0: # more shuffling if required
-                a, b, c, d = new_teamnos[-4:]
-                new_teamnos[-4:] = [a, c, b, d]
+                if len(teamnos) % 4 != 0: # more shuffling if required
+                    a, b, c, d = new_teamnos[-4:]
+                    new_teamnos[-4:] = [a, c, b, d]
 
-            teamnos = new_teamnos
+                teamnos = new_teamnos
 
         assert len(teamnos) == len(table_events), "Team assignment length mismatch!"        
 
@@ -216,10 +258,14 @@ class Tournament:
         self.events.update(table_events_sorted)
 
     def assign_all_matches(self, max_startovers=1000, max_r1 = 1e5, max_r2 = 4e5, max_r3=16e5):
-        self.assign_match_round(1)
-        self.assign_match_round(2)
-        self.assign_match_round(3)
-        return True
+
+        if self.strategy_randomize == "judging":
+            self.assign_match_round(1)
+            self.assign_match_round(2)
+            self.assign_match_round(3)
+            return True
+        
+        # Randomize the matches. 
         
         for m in range(max_startovers):
             print(f"STARTING MATCH ASSIGNMENT ATTEMPT {m}..")
@@ -253,7 +299,6 @@ class Tournament:
 
             # Try round 3
             for i in range(int(max_r3)):
-                print("GENERATING ROUND 3 ATTEMPT ", i)
                 self.assign_match_round(3)
                 if self.verbose and i%1000 == 0:
                     print(f"  Trying round 3 assignment attempt {i}...")
@@ -402,7 +447,6 @@ class Tournament:
         tabletimes = tablerounds["Time"].values
         teams_we_care_about = self.events[(self.events["RoundNo"] != 0) & \
                                 (self.events["Time"].isin(tabletimes))]["Team"].unique().tolist()
-        print(tablerounds)
         
         # swap round 1 opponent and see if it fixes the problem
         for round in range(1, 4):
@@ -416,15 +460,12 @@ class Tournament:
             fixed = True
             for team in teams_we_care_about:
                 fixed &= self.see_unique_tables(team)
-                print(team, fixed)
-            print("FIXED?", fixed)
 
             # swap back if it didn't fix
             if not fixed:
                 round_match.loc[:, "Team"] = round_match["Team"][::-1].values
                 self.events.update(round_match)
             else:
-                print("FIXED!, swapped round ", round)
                 return 
             
     # save the df to a csv
