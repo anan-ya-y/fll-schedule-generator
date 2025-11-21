@@ -56,7 +56,7 @@ class Config:
 
         # TEAM STUFF - this does NOT get saved to .JSON!!
         self.team = SubConfig()
-        self.team.time_between_events = 10 # minutes; minimum time between end of 1 event and start of next. 
+        self.team.time_between_events = 30 # minutes; minimum time between end of 1 event and start of next. 
         self.team.teamlist_file = "teamlist.csv"
 
         # do not touch. 

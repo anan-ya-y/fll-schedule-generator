@@ -6,6 +6,7 @@ from pylatex import (
     Document,
     Tabular,
     Package,
+    LongTable,
 )
 
 def bold(x):
@@ -119,3 +120,48 @@ def create_judging_schedule(Tournament):
                 
 
     doc.generate_pdf('judging_schedule', clean_tex=False)
+
+def create_ref_schedule(Tournament):
+    doc = create_doc(landscape=True)
+
+    doc.append(NoEscape(r'\large'))
+    doc.append(NoEscape(r'\sffamily'))
+    doc.append(NoEscape(r'\def\arraystretch{1.5}'))
+    doc.append(NoEscape(r'\rowcolors{2}{gray!0}{gray!10}'))
+
+    events = Tournament.events
+    match_events = events[events["RoundNo"] != 0].sort_values(by=["Time", "Room"])
+    match_events = match_events.groupby(by=["Time"])
+    times = match_events.groups.keys()
+
+    with doc.create(LongTable("|c|c|l|l|p{3in}|r|r|")) as t:
+        t.add_hline()
+        t.add_row((
+            bold("Time"),
+            bold("Rnd"),
+            bold("Table No."),
+            bold("Team 1"),
+            bold("Notes"),
+            bold("Team 2"),
+            bold("Table No.")
+        ))
+        t.add_hline()
+
+        for time in times:
+            timeevents = match_events.get_group(time)
+            teamA = timeevents.iloc[0]
+            teamB = timeevents.iloc[1]
+
+            t.add_row(tuple(
+               [ time.strftime("%I:%M %p"),
+                teamA.RoundNo,
+                teamA.Room,
+                f'{teamA.Team}: {teamA.TeamName}',
+                "",
+                f'{teamB.Team}: {teamB.TeamName}',
+                teamB.Room]
+            ))
+
+            t.add_hline()
+
+    doc.generate_pdf('ref_schedule', clean_tex=False)
