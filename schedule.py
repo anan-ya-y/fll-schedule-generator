@@ -3,12 +3,16 @@ import numpy as np
 import pandas as pd
 
 class Tournament:
-    def __init__(self, config, verbose=True, veryverbose=False):
+    def __init__(self, config, verbose=True, veryverbose=False, csvfile=None):
         self.config = config
         self.verbose = verbose
         self.veryverbose = veryverbose
         if self.veryverbose:
             self.verbose = True
+
+        if csvfile is not None:
+            self.load_schedule_csv(csvfile)
+            return
 
 
         self.events = pd.DataFrame(columns=[
@@ -16,8 +20,6 @@ class Tournament:
         ])
         # EventName = "Project", "Design", "Table", "Opening/Closing/etc"
         # RoundNo = 0 if not a table round, else 1, 2, or 3
-
-
 
         # self.events = [] # All events in the tournament
         # self.events_by_team = {} # {teamno : [Events]}
@@ -31,14 +33,15 @@ class Tournament:
         # Then, assign teams by distance. 
         self.get_judging_times()
         self.get_match_times()
+        # breakpoint()
         
         # Strategy for template:
-        # 1. Fix the Judging rounds
-        self.assign_judging()
-
-        # 2. Fix the Match rounds
         self.assign_all_matches()
-        
+        valid_schedule = self.verify_schedule(check_opponents=True, check_table_diversity=True)
+        assert valid_schedule, "Match schedule algorithm failed!!!"
+
+        self.assign_all_judging()
+
         # 3. Verify the schedule (assign_all_matches already does this, but JUUST IN CASE)
         self.veryverbose = True
         valid_schedule = self.verify_schedule() 
@@ -107,40 +110,34 @@ class Tournament:
                 })
         self.events = pd.concat([self.events, pd.DataFrame(judging_events)], ignore_index=True)
 
-    # Create judging assignments - update self.events and self.events_by_team
-    def assign_judging(self, shuffle_teams=False):
-        self.clear_judging_events()
+    # Create judging assignments - no verification
+    def assign_judging(self, eventtype):
+        self.clear_judging_events(eventtype)
 
-        project_design_events = self.events[self.events["EventName"].isin(["Project", "Design"])]
-        pd_events_sorted = project_design_events.sort_values(by=["EventName", "Room", "Time"], ascending=True)
-        # ^ this particular order ["Room", "Time"] puts back to back times for the same room
-        # looks like:
-        # 0   09:45:00    Design       0  DR1       10   -1
-        # 4   10:05:00    Design       0  DR1       10   -1
-        # 8   10:25:00    Design       0  DR1       10   -1
-        # 12  10:55:00    Design       0  DR1       10   -1
-        # ...
-
+        events = self.events[self.events["EventName"] == eventtype]
+        events_sorted = events.sort_values(by=["Room", "Time"], ascending=True)
         teamnos = self.teamid_keys.copy()
-        if shuffle_teams:
-            np.random.shuffle(teamnos)
-
-        # Assign the teams to the first judging (design?) event as is (sorted by room/time)
-        teamlist = teamnos.copy()
-        # Do some math for the second event (project?) - depends on how "EventName" is sorted
-        # first rooms were [1 11] [2 12] [3 13]... [10 20] if 20 teams. 
-        # second rooms should be [5 15] [6 16] [7 17]... [4 14] if 20 teams.
-        rooms = np.array(teamnos)
-        rooms = rooms.reshape((self.config.tournament.njudging_rooms, -1))
-        rooms = np.hstack((rooms[:, len(rooms[1])//2:], rooms[:, :len(rooms[1])//2])).reshape(-1)
-        # ^ yes, there is basically magic happening here. Sorry, future me. 
-
-        teamlist = teamlist + list(rooms)
-        assert len(teamlist) == len(pd_events_sorted), "Team assignment length mismatch!"
-        pd_events_sorted["Team"] = teamlist
-
+        np.random.shuffle(teamnos)
+        events_sorted.loc[:, "Team"] = teamnos
         # Update self.events
-        self.events.update(pd_events_sorted)
+        self.events.update(events_sorted)
+
+    def assign_all_judging(self, project_max_attempts=1e4, design_max_attempts=1e5):
+        for i in range(int(project_max_attempts)):
+            if i % 1000 == 0:
+                print(f"STARTING (project) JUDGING ASSIGNMENT ATTEMPT {i}...")
+
+            self.assign_judging("Project")
+            good_proj = self.verify_schedule()
+            if good_proj:
+                for j in range(int(design_max_attempts)):
+                    if j % 1000 == 0:
+                        print(f"  Trying design judging assignment attempt {j}...")
+                    self.assign_judging("Design")
+                    good_design = self.verify_schedule()
+                    if good_design:
+                        return True
+        return False
 
     # Create match times. 
     def get_match_times(self):
@@ -189,18 +186,41 @@ class Tournament:
         self.clear_table_events(roundno)
 
         table_events = self.events[self.events["RoundNo"] == roundno]
+        table_events_sorted = table_events.sort_values(by=["Time", "Room"], ascending=True)
 
         teamnos = self.teamid_keys.copy()
-        np.random.shuffle(teamnos)
+        # np.random.shuffle(teamnos)
 
-        assert len(teamnos) == len(table_events), "Team assignment length mismatch!"
+        if roundno == 2:
+            pass # keep as is
+        elif roundno == 1:
+            teamnos = [teamnos[-1]] + teamnos[:-1]  # shift by 1
+        elif roundno == 3:
+            new_teamnos = []
+            for i in range(len(teamnos)//4):
+                a, b, c, d = teamnos[4*i :4*i+4]
+                new_teamnos.extend([a,c, b, d])
+            new_teamnos.extend(teamnos[4*(len(teamnos)//4):]) # add remaining teams if not multiple of 4
 
-        table_events.loc[:, "Team"] = teamnos
+            if len(teamnos) % 4 != 0: # more shuffling if required
+                a, b, c, d = new_teamnos[-4:]
+                new_teamnos[-4:] = [a, c, b, d]
+
+            teamnos = new_teamnos
+
+        assert len(teamnos) == len(table_events), "Team assignment length mismatch!"        
+
+        table_events_sorted.loc[:, "Team"] = teamnos
 
         # Update self.events
-        self.events.update(table_events)
+        self.events.update(table_events_sorted)
 
     def assign_all_matches(self, max_startovers=1000, max_r1 = 1e5, max_r2 = 4e5, max_r3=16e5):
+        self.assign_match_round(1)
+        self.assign_match_round(2)
+        self.assign_match_round(3)
+        return True
+        
         for m in range(max_startovers):
             print(f"STARTING MATCH ASSIGNMENT ATTEMPT {m}..")
             # Try round 1
@@ -249,9 +269,9 @@ class Tournament:
     ################### UTILITIES ###################
     #################################################
     # remove all judging events from self.events and self.events_by_team
-    def clear_judging_events(self):
+    def clear_judging_events(self, eventtype):
         # change the teamno of these columns to -1
-        self.events.loc[self.events["EventName"].isin(["Project", "Design"]), "Team"] = -1
+        self.events.loc[self.events["EventName"] == eventtype, "Team"] = -1
 
     # Remove all table events from self.events and self.events_by_team
     # roundno = -1 means all rounds
@@ -293,6 +313,9 @@ class Tournament:
             if self.veryverbose:
                 print(f"Schedule verification failed: team {fail_team} has insufficient gap between events.")
             return False
+        else:
+            if self.veryverbose:
+                print(f"Smallest gap: {fail_team} minutes.")
         
         # Make sure all teams have different opponents for each table round
         if check_opponents:
@@ -333,6 +356,7 @@ class Tournament:
         return True
     
     def verify_event_gap(self):
+        min_gap = 100000
         for teamno in self.teamid_keys:
             time_blocks = self.get_team_events_interval_list(teamno)
             # Sort by start time
@@ -341,12 +365,13 @@ class Tournament:
                 prev_end = TimeUtils.add_times(time_blocks[i - 1][0], time_blocks[i - 1][1])
                 curr_start = time_blocks[i][0]
                 gap = TimeUtils.subtract_times(curr_start, prev_end)
+                min_gap = min(min_gap, gap)
                 if gap < self.config.team.time_between_events:
                     if self.veryverbose:
                         print(f"Team {teamno} has insufficient gap between events.")
                     return False, teamno
                 
-        return True, -1
+        return True, min_gap
     
     def verify_opponent_diversity(self):
         tablerounds = self.events[(self.events["RoundNo"] != 0) & (self.events["Team"] != -1)]
