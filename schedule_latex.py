@@ -1,5 +1,6 @@
 from schedule import Tournament
 from utils import Event
+import pandas as pd
 from pylatex.utils import NoEscape
 from pylatex import (
     Document,
@@ -10,16 +11,16 @@ from pylatex import (
 def bold(x):
     return NoEscape(r'\textbf{' + str(x) + '}')
 
-def create_doc():
+def create_doc(landscape=False):
     doc = Document()
-    doc.packages.append(Package('geometry', options=['a4paper', 'margin=1cm', 'landscape']))
+    doc.packages.append(Package('geometry', options=['a4paper', 'margin=1cm', 'landscape' if landscape else "portrait"]))
 
     doc.packages.append(Package('xcolor', options='table'))
 
     return doc
 
 def create_team_schedule(Tournament):
-    doc = create_doc()
+    doc = create_doc(landscape=True)
 
     # doc.append(NoEscape(r'\large'))
     doc.append(NoEscape(r'\sffamily'))
@@ -44,7 +45,7 @@ def create_team_schedule(Tournament):
         ))
         t.add_hline()
 
-        teamnos = Tournament.teamid_keys.copy()
+        teamnos = Tournament.events["Team"].unique().tolist()
         teamnos.sort(key=lambda x: int(x))
         for teamno in teamnos:
             teamevents = Tournament.get_events_by_team().get_group(teamno)
@@ -79,4 +80,42 @@ def create_team_schedule(Tournament):
 
     doc.generate_pdf('team_schedule', clean_tex=False)
 
+def create_judging_schedule(Tournament):
+    doc = create_doc(landscape=True)
 
+    doc.append(NoEscape(r'\large'))
+    doc.append(NoEscape(r'\sffamily'))
+    doc.append(NoEscape(r'\def\arraystretch{1.5}'))
+    doc.append(NoEscape(r'\rowcolors{2}{gray!0}{gray!10}'))
+
+    events = Tournament.events
+    project_events = events[events["EventName"] == "Project"]
+    design_events = events[events["EventName"] == "Design"]
+    judging_events = pd.concat([project_events, design_events])
+    all_rooms = sorted(judging_events["Room"].unique().tolist())
+
+    all_times = judging_events["Time"].unique().tolist()
+    all_times.sort()
+
+    tabular = "|c" * (1 + len(all_rooms)) + "|"
+
+    with doc.create(Tabular(tabular)) as t:
+        t.add_hline()
+        t.add_row(tuple([bold("Time")] + [bold(f"{r}") for r in all_rooms]))
+        t.add_hline()
+
+        for time in all_times:
+            timeevents = judging_events.groupby(by="Time").get_group(time)
+            roomevents = {r: 
+                          timeevents[timeevents["Room"] == r].iloc[0].to_dict() for r in all_rooms}
+            t.add_row(
+                tuple(
+                    [time.strftime("%I:%M %p")] +
+                    [f'{roomevents[r]["Team"]}: {roomevents[r]["TeamName"]}' if r in roomevents else "" for r in all_rooms]
+                )
+            )
+
+            t.add_hline()
+                
+
+    doc.generate_pdf('judging_schedule', clean_tex=False)

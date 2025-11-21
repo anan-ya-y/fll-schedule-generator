@@ -91,7 +91,7 @@ class Config:
 
         assert len(self.team.teamnames) == self.tournament.nteams, "Number of teams in teamlist does not match nteams in config."
 
-        self.team.teamnos_to_names = {row["Team Number"]: row["Team Name"] for _, row in self.team.teamlist.iterrows()}
+        self.team.teamnos_to_names = {row["Team Number"]: row["Team Name"].strip() for _, row in self.team.teamlist.iterrows()}
         self.team.teamnos_to_distances = {row["Team Number"]: row["Distance"] for _, row in self.team.teamlist.iterrows()}
 
         self.day.lunch_end = TimeUtils.add_times(self.day.lunch_start, self.day.nminutes_lunch)    
