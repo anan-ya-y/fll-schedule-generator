@@ -26,8 +26,8 @@ class Tournament:
         
         # Strategy for template:
         # 1. Fix the Judging rounds
-        self.judging_times = self.get_judging_times()
-        self.assign_judging(self.judging_times)
+        self.get_judging_times()
+        self.assign_judging()
         # 2. Match Table Round 1. 
         # 3. Match Table Round 3. 
         # 4. Match Table Round 2 - Try n times, then start over.
