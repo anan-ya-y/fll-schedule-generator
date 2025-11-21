@@ -1,12 +1,22 @@
 from utils import TimeUtils, Event
 import numpy as np
+import pandas as pd
 
 class Tournament:
     def __init__(self, config):
         self.config = config
-        self.events = [] # All events in the tournament
-        self.events_by_team = {} # {teamno : [Events]}
+        self.events = pd.DataFrame(columns=[
+            "Time", "EventName", "RoundNo", "Room", "Duration", "Team"
+        ])
+        # EventName = "Project", "Design", "Round 1", "Round 2", "Round 3", "Opening/Closing/etc"
+        # RoundNo = 0 if not a table round, else 1, 2, or 3
+
+
+
+        # self.events = [] # All events in the tournament
+        # self.events_by_team = {} # {teamno : [Events]}
         self.nteams = self.config.tournament.nteams
+        self.teamid_keys = [str(k) for k in range(1, 1 + self.nteams)]
 
         self.lunch_start = self.config.day.lunch_start
         self.lunch_end = self.config.day.lunch_end
@@ -22,7 +32,7 @@ class Tournament:
         # 3. Match Table Round 3. 
         # 4. Match Table Round 2 - Try n times, then start over.
         
-        
+        breakpoint()
         self.verify_schedule() 
 
         # When a team is found, save the template. 
@@ -68,89 +78,67 @@ class Tournament:
     def assign_judging(self, judging_times, shuffle_teams=False):
         self.clear_judging_events()
 
-        team_order = np.arange(1, 1 + self.nteams)
+        team_order = self.teamid_keys.copy()
         if shuffle_teams:
             np.random.shuffle(team_order)
 
-        # Assign the project rooms in order. 
-        team_idx = 0
-        for roomno in range(self.config.tournament.nproject_rooms):
-            for time in judging_times:
-                if team_idx >= self.nteams:
-                    break
-                teamno = team_order[team_idx]
-                event = Event(
-                    time=time,
-                    title="Project",
-                    room=f"Project Room {roomno + 1}",
-                    duration=self.config.judging.nminutes_judging,
-                    eventtype="project",
-                    team=teamno
-                )
-                self.events.append(event)
-                team_idx += 1
-
-        # Assign the design rooms in half order
-        team_idx = 0
         design_judging_times = judging_times[len(judging_times)//2:] + \
                                 judging_times[:len(judging_times)//2]
-        for roomno in range(self.config.tournament.ndesign_rooms):
-            for time in design_judging_times:
+
+        # Assign the project rooms in order. 
+        team_idx = 0
+        events = []
+        for roomno in range(self.config.tournament.nproject_rooms):
+            for p_time, d_time in zip(judging_times, design_judging_times):
                 if team_idx >= self.nteams:
                     break
                 teamno = team_order[team_idx]
-                event = Event(
-                    time=time,
-                    title="Design",
-                    room=f"Design Room {roomno + 1}",
-                    duration=self.config.judging.nminutes_judging,
-                    eventtype="design",
-                    team=teamno
-                )
-                self.events.append(event)
+                events.append({
+                    "Time": p_time,
+                    "EventName": "Project",
+                    "RoundNo": 0,
+                    "Room": f"PR {roomno + 1}",
+                    "Duration": self.config.judging.nminutes_judging,
+                    "Team": teamno
+                })
+
+                events.append({
+                    "Time": d_time,
+                    "EventName": "Design",
+                    "RoundNo": 0,
+                    "Room": f"DR {roomno + 1}",
+                    "Duration": self.config.judging.nminutes_judging,
+                    "Team": teamno
+                })
+
                 team_idx += 1
 
-        self.update_events_by_team()
+        self.events = pd.concat([self.events, pd.DataFrame(events)], ignore_index=True)
 
     #################################################
     ################### UTILITIES ###################
     #################################################
     # remove all judging events from self.events and self.events_by_team
     def clear_judging_events(self):
-        new_events = []
-        for event in self.events:
-            if event.title.lower() in ["project", "design"]:
-                continue
-            new_events.append(event)
-        self.events = new_events
-
-        self.update_events_by_team()
+        self.events = self.events[self.events["EventName"].isin(["Project", "Design"]) == False]
 
     # Remove all table events from self.events and self.events_by_team
     # roundno = -1 means all rounds
     def clear_table_events(self, roundno=-1):
-        new_events = []
-        for event in self.events:
-            if event.title.lower().startswith("round"):
-                if roundno == -1 or event.title.lower() == f"round {roundno}":
-                    continue
-            new_events.append(event)
-        self.events = new_events
+        if roundno == -1:
+            self.events = self.events[self.events["RoundNo"] != 0]
+        else:
+            self.events = self.events[self.events["RoundNo"] != roundno]
 
-        self.update_events_by_team()
-
-    # Update self.events_by_team based on self.events
-    # TODO MAKE SMARTER. 
-    def update_events_by_team(self):
-        self.events_by_team = {}
-        for event in self.events:
-            if event.team == -1:
-                continue
-            if event.team not in self.events_by_team:
-                self.events_by_team[event.team] = []
-            self.events_by_team[event.team].append(event)
-
-
+    def get_events_by_team(self):
+        self.events = self.events.sort_values(by="Time", ascending=True)
+        return self.events.groupby(by="Team")
+    
+    def get_team_events_interval_list(self, teamno):
+        df = self.get_events_by_team().get_group(teamno)
+        df_td = df[["Time", "Duration"]]
+        df_tuples = df_td.apply(lambda x: (x['Time'], x['Duration']), axis=1)
+        return df_tuples.tolist()
     
     ##############################################################
     ################### VERIFICATION FUNCTIONS ###################
@@ -183,17 +171,18 @@ class Tournament:
         return True 
 
     def verify_no_team_overlaps(self):
-        for teamno, events in self.events_by_team.items():
+        for teamno in self.teamid_keys:
             # Create list of (start_time, duration) tuples
-            time_blocks = [(event.time, event.duration) for event in events]
+            time_blocks = self.get_team_events_interval_list(teamno)
+            # Check for overlaps
             if TimeUtils.contains_overlap(time_blocks):
                 print(f"Team {teamno} has overlapping events.")
                 return False
         return True
     
     def verify_event_gap(self):
-        for teamno, events in self.events_by_team.items():
-            time_blocks = [(event.time, event.duration) for event in events]
+        for teamno in self.teamid_keys:
+            time_blocks = self.get_team_events_interval_list(teamno)
             # Sort by start time
             time_blocks.sort(key=lambda x: x[0])
             for i in range(1, len(time_blocks)):
