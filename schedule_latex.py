@@ -12,7 +12,7 @@ def create_team_schedule(schedule):
 
     doc.packages.append(Package('xcolor', options='table'))
 
-    doc.append(NoEscape(r'\large'))
+    # doc.append(NoEscape(r'\l  arge'))
     doc.append(NoEscape(r'\sffamily'))
     doc.append(NoEscape(r'\def\arraystretch{1.5}'))
     doc.append(NoEscape(r'\rowcolors{2}{gray!0}{gray!10}'))
