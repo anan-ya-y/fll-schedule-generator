@@ -32,7 +32,6 @@ class Tournament:
         # 3. Match Table Round 3. 
         # 4. Match Table Round 2 - Try n times, then start over.
         
-        breakpoint()
         self.verify_schedule() 
 
         # When a team is found, save the template. 
@@ -72,55 +71,75 @@ class Tournament:
             if TimeUtils.contains_overlap([(self.lunch_start, self.config.day.nminutes_lunch),
                                            (next_judging_time, self.config.judging.nminutes_judging)]):
                 next_judging_time = self.lunch_end
-        return judging_times
 
-    # Create judging assignments - update self.events and self.events_by_team
-    def assign_judging(self, judging_times, shuffle_teams=False):
-        self.clear_judging_events()
-
-        team_order = self.teamid_keys.copy()
-        if shuffle_teams:
-            np.random.shuffle(team_order)
-
-        design_judging_times = judging_times[len(judging_times)//2:] + \
-                                judging_times[:len(judging_times)//2]
-
-        # Assign the project rooms in order. 
-        team_idx = 0
-        events = []
-        for roomno in range(self.config.tournament.nproject_rooms):
-            for p_time, d_time in zip(judging_times, design_judging_times):
-                if team_idx >= self.nteams:
-                    break
-                teamno = team_order[team_idx]
-                events.append({
-                    "Time": p_time,
-                    "EventName": "Project",
-                    "RoundNo": 0,
-                    "Room": f"PR {roomno + 1}",
-                    "Duration": self.config.judging.nminutes_judging,
-                    "Team": teamno
-                })
-
-                events.append({
-                    "Time": d_time,
+        # Add judging times to self.events
+        judging_events = []
+        for j_time in judging_times:
+            # design rooms
+            for design_room in self.config.tournament.design_room_names:
+                judging_events.append({
+                    "Time": j_time,
                     "EventName": "Design",
                     "RoundNo": 0,
-                    "Room": f"DR {roomno + 1}",
+                    "Room": design_room,
                     "Duration": self.config.judging.nminutes_judging,
-                    "Team": teamno
+                    "Team": -1
                 })
 
-                team_idx += 1
+            # project rooms
+            for project_room in self.config.tournament.project_room_names:
+                judging_events.append({
+                    "Time": j_time,
+                    "EventName": "Project",
+                    "RoundNo": 0,
+                    "Room": project_room,
+                    "Duration": self.config.judging.nminutes_judging,
+                    "Team": -1
+                })
+        self.events = pd.concat([self.events, pd.DataFrame(judging_events)], ignore_index=True)
 
-        self.events = pd.concat([self.events, pd.DataFrame(events)], ignore_index=True)
+    # Create judging assignments - update self.events and self.events_by_team
+    def assign_judging(self, shuffle_teams=False):
+        self.clear_judging_events()
+
+        project_design_events = self.events[self.events["EventName"].isin(["Project", "Design"])]
+        pd_events_sorted = project_design_events.sort_values(by=["EventName", "Room", "Time"], ascending=True)
+        # ^ this particular order ["Room", "Time"] puts back to back times for the same room
+        # looks like:
+        # 0   09:45:00    Design       0  DR1       10   -1
+        # 4   10:05:00    Design       0  DR1       10   -1
+        # 8   10:25:00    Design       0  DR1       10   -1
+        # 12  10:55:00    Design       0  DR1       10   -1
+        # ...
+
+        teamnos = self.teamid_keys.copy()
+        if shuffle_teams:
+            np.random.shuffle(teamnos)
+
+        # Assign the teams to the first judging (design?) event as is (sorted by room/time)
+        teamlist = teamnos.copy()
+        # Do some math for the second event (project?) - depends on how "EventName" is sorted
+        # first rooms were [1 11] [2 12] [3 13]... [10 20] if 20 teams. 
+        # second rooms should be [5 15] [6 16] [7 17]... [4 14] if 20 teams.
+        rooms = np.array(teamnos)
+        rooms = rooms.reshape((self.config.tournament.njudging_rooms, -1))
+        rooms = np.hstack((rooms[:, len(rooms[1])//2:], rooms[:, :len(rooms[1])//2])).reshape(-1)
+        # ^ yes, there is basically magic happening here :)
+
+        teamlist = teamlist + list(rooms)
+        assert len(teamlist) == len(pd_events_sorted), "Team assignment length mismatch!"
+        pd_events_sorted["Team"] = teamlist
+
+        # Update self.events
+        self.events.update(pd_events_sorted)
 
     #################################################
     ################### UTILITIES ###################
     #################################################
     # remove all judging events from self.events and self.events_by_team
     def clear_judging_events(self):
-        self.events = self.events[self.events["EventName"].isin(["Project", "Design"]) == False]
+        # change the teamno of these columns to -1
+        self.events.loc[self.events["EventName"].isin(["Project", "Design"]), "Team"] = -1
 
     # Remove all table events from self.events and self.events_by_team
     # roundno = -1 means all rounds

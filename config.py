@@ -14,10 +14,11 @@ class Config:
         # TOURNAMENT CONFIGURATION
         self.tournament = SubConfig()
         self.tournament.nteams = 20
-        self.tournament.nproject_rooms = 2
-        self.tournament.ndesign_rooms = 2
+        self.tournament.njudging_rooms = 2 # per type (total = 4 if this =2)
         self.tournament.ntables = 2
         self.tournament.ntable_rounds = 3
+        self.tournament.design_room_names = ["a", "c"]
+        self.tournament.project_room_names = ["b", "d"]
         
         # TABLE ROUNDS CONFIGURATION. 
         self.table = SubConfig()
@@ -52,6 +53,10 @@ class Config:
         np.random.seed(self.seed)
 
     def process(self):
+        self.tournament.nproject_rooms = self.tournament.njudging_rooms
+        self.tournament.ndesign_rooms = self.tournament.njudging_rooms
+
+
         self.day.start_time = datetime.strptime(self.day.start_time, "%H:%M").time()
         self.day.lunch_start = datetime.strptime(self.day.lunch_start, "%H:%M").time()
         self.day.closing_ceremony_time = datetime.strptime(self.day.closing_ceremony_time, "%H:%M").time()
