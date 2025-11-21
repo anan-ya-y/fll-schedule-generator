@@ -3,6 +3,9 @@ import schedule_latex as sln
 from schedule import Tournament
 
 c = Config()
+# c.to_json("config.json")
+
+# c = Config.from_json("config.json")
 
 # create the slots to be filled. 
 # s = Schedule(c)
@@ -27,5 +30,6 @@ c = Config()
 
 # sl.create_team_schedule(s)
 
-t = Tournament(c)
+t = Tournament(c)#, csvfile="tournament_schedule.csv")
 sln.create_team_schedule(t)
+t.save_schedule_csv("tournament_schedule.csv")
