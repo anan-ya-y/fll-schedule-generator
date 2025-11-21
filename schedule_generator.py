@@ -32,4 +32,5 @@ c = Config()
 
 t = Tournament(c)#, csvfile="tournament_schedule.csv")
 sln.create_team_schedule(t)
+sln.create_judging_schedule(t)
 t.save_schedule_csv("tournament_schedule.csv")

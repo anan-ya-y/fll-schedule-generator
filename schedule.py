@@ -54,6 +54,8 @@ class Tournament:
         # Then, create a way for us to insert the template file into the constructor. 
         # Fill in teams by distance/latest judging order. 
 
+        self.assign_teams_to_judging()
+
     # Returns the judging slots. 
     def get_judging_times(self):
         judging_start_time = TimeUtils.add_times( 
@@ -310,6 +312,33 @@ class Tournament:
                 return True
         return False
 
+    def assign_teams_to_judging(self):
+        all_earliest_times = [] # (earliest_time, teamno)
+        
+        for teamno in self.teamid_keys:
+            team_events = self.get_events_by_team().get_group(teamno)
+            judging_events = team_events[team_events["RoundNo"] == 0]
+            judging_times = judging_events["Time"].values
+            earliest_judging_time = min(judging_times)
+            all_earliest_times.append((earliest_judging_time, teamno))
+        
+        all_earliest_times.sort(key=lambda x: x[0]) # sort by earliest judging time
+        # get all teams by distance
+        all_teams_to_dists = [(y, x) for x, y in self.config.team.teamnos_to_distances.items()]
+        all_teams_to_dists.sort(key=lambda x: x[0]) # sort by distance
+
+        self.events["Team ID"] = self.events["Team"] 
+        self.events.loc[:, "Team"] = -1
+
+        for x, y in zip(all_earliest_times, all_teams_to_dists):
+            earliest_time, teamid = x
+            dist, teamno = y
+
+            self.events.loc[self.events["Team ID"] == teamid, "Team"] = teamno
+            self.events.loc[self.events["Team ID"] == teamid, "TeamName"] = self.config.team.teamnos_to_names[teamno]
+
+        return True
+
     #################################################
     ################### UTILITIES ###################
     #################################################
@@ -376,7 +405,6 @@ class Tournament:
                 table_div = self.verify_table_diversity()
                 if table_div == -1:
                     break
-                print("Just found broken team:", table_div)
                 if self.veryverbose:
                     print(f"Schedule verification: team {table_div} doesn't see enough tables. Attempting to fix...")
 
