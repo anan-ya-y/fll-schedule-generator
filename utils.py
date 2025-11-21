@@ -21,21 +21,12 @@ class TimeUtils:
             full_datetime = datetime.datetime.combine(datetime.datetime.today(), time) - td
             return full_datetime.time()
         if type(td) is datetime.time:
-            full_datetime = datetime.datetime.combine(datetime.datetime.today(), time) - \
+            diff_td = datetime.datetime.combine(datetime.datetime.today(), time) - \
                 datetime.timedelta(hours=td.hour, minutes=td.minute, seconds=td.second)
-            return full_datetime.time()
+            diff_td = diff_td.time()
+            difference_minutes = diff_td.hour * 60 + diff_td.minute
+            return difference_minutes
         raise ValueError("td must be int or datetime.time")
-    
-    @staticmethod
-    def is_during_lunch(lunch_start, lunch_duration, time):
-        # if time is before lunch_start
-        if datetime.datetime.combine(datetime.datetime.today(), time) < \
-            datetime.datetime.combine(datetime.datetime.today(), lunch_start):
-            return False
-
-        difference = TimeUtils.subtract_times(time, lunch_start)
-        difference = difference.hour * 60 + difference.minute
-        return difference < lunch_duration
     
     # Intervals is a list [(starttime, duration), ...]
     # Returns True if any overlap. False otherise. 
@@ -52,9 +43,9 @@ class TimeUtils:
         return False
     
 class Event:
-    def __init__(self, time, title, room, duration, team=-1):
+    def __init__(self, time, title, room, duration, eventtype=None, team=-1):
         self.time = time
-        self.title = title
+        self.title = title # "Project", "Design", "Round 1", "Round 2", "Round 3", or "Opening/Closing/etc"
         self.room = room
         self.duration = duration
         self.team = team
