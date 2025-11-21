@@ -23,7 +23,7 @@ class Config:
         # TABLE ROUNDS CONFIGURATION. 
         self.table = SubConfig()
         self.table.match_break_duration = 10
-        self.table.nminutes_table_rnd1 = 8
+        self.table.nminutes_table_rnd1 = 10
         self.table.nminutes_table_allrounds = 8
 
         # JUDGING CONFIGURATION
