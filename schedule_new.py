@@ -8,7 +8,7 @@ class Tournament:
         self.events = pd.DataFrame(columns=[
             "Time", "EventName", "RoundNo", "Room", "Duration", "Team"
         ])
-        # EventName = "Project", "Design", "Round 1", "Round 2", "Round 3", "Opening/Closing/etc"
+        # EventName = "Project", "Design", "Table", "Opening/Closing/etc"
         # RoundNo = 0 if not a table round, else 1, 2, or 3
 
 
@@ -23,10 +23,13 @@ class Tournament:
 
         # Strategy: Create a template of events. 
         # Then, assign teams by distance. 
+        self.get_judging_times()
+        self.get_match_times()
         
+        breakpoint()
         # Strategy for template:
         # 1. Fix the Judging rounds
-        self.get_judging_times()
+
         self.assign_judging()
         # 2. Match Table Round 1. 
         # 3. Match Table Round 3. 
@@ -48,7 +51,7 @@ class Tournament:
         # Number of judging slots required. 
         total_judging_rooms = self.config.tournament.nproject_rooms + \
                                 self.config.tournament.ndesign_rooms
-        n_judging_slots = np.round((self.config.tournament.nteams * 2) / total_judging_rooms, 0).astype(int)
+        n_judging_slots = np.ceil((self.config.tournament.nteams * 2) / total_judging_rooms).astype(int)
 
         judging_times = []
         next_judging_time = judging_start_time
@@ -135,7 +138,46 @@ class Tournament:
 
     # Create match times. 
     def get_match_times(self):
-        pass
+        nrounds = self.config.tournament.ntable_rounds
+        nmatches_per_round = np.ceil(self.nteams / self.config.tournament.ntables).astype(int)
+
+        match_events = []
+        round_no = 1
+        next_match_time = self.config.day.matches_start_time
+        for i in range(1, 1 + (nmatches_per_round * nrounds)):
+            start_time = next_match_time 
+            match_duration = self.config.table.nminutes_table_rnd1 if round_no == 1 else \
+                             self.config.table.nminutes_table_allrounds
+            # create events for all tables at this time
+            for tableno in range(1, 1 + self.config.tournament.ntables):
+                match_events.append({
+                    "Time": start_time,
+                    "EventName": f"Table",
+                    "RoundNo": round_no,
+                    "Room": f"Table {tableno}",
+                    "Duration": match_duration,
+                    "Team": -1
+                })
+
+            next_match_time = TimeUtils.add_times(
+                next_match_time,
+                match_duration
+            )
+
+            # make sure nothing runs through lunch
+            if TimeUtils.contains_overlap([(self.lunch_start, self.config.day.nminutes_lunch),
+                                           (next_match_time, match_duration)]):
+                next_match_time = self.lunch_end
+
+            if i % nmatches_per_round == 0:
+                round_no += 1
+                # Add a break
+                next_match_time = TimeUtils.add_times(
+                    next_match_time,
+                    self.config.table.match_break_duration
+                )
+
+        self.events = pd.concat([self.events, pd.DataFrame(match_events)], ignore_index=True)
 
     #################################################
     ################### UTILITIES ###################
