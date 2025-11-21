@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 class Tournament:
-    def __init__(self, config, verbose=True, veryverbose=False, csvfile=None, strategy_randomize="judging"):
+    def __init__(self, config, verbose=True, veryverbose=False, csvfile=None, strategy_randomize="matches"):
         self.config = config
         self.verbose = verbose
         self.veryverbose = veryverbose
