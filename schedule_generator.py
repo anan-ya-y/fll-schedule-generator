@@ -1,8 +1,6 @@
 from config import Config
-from schedule import Schedule
-import schedule_latex as sl
-import schedule_latex_new as sln
-from schedule_new import Tournament
+import schedule_latex as sln
+from schedule import Tournament
 
 c = Config()
 
