@@ -43,34 +43,38 @@ def create_team_schedule(Tournament):
             bold(r'Room \#'),
         ))
         t.add_hline()
-        teamnos = list(Tournament.events_by_team.keys())
+
+        teamnos = Tournament.teamid_keys.copy()
         teamnos.sort(key=lambda x: int(x))
         for teamno in teamnos:
-            teamevents = Tournament.events_by_team[teamno]
-            teamname = f"Team {teamno}"
+            teamevents = Tournament.get_events_by_team().get_group(teamno)
+            strevents = {
+                "Project": ("XX:XX", "Room X"), 
+                "Design": ("XX:XX", "Room X"),
+                "Round 1": ("XX:XX", "Table X"),
+                "Round 2": ("XX:XX", "Table X"),
+                "Round 3": ("XX:XX", "Table X"),
+            }
 
-            team = {}
-            for event in teamevents:
-                team[event.title] = (event.time, event.room, event.duration)
-
-            r1_time, r1_table, _ = team["Round 1"] if "Round 1" in team else ("x", "x", None)
-            r2_time, r2_table, _ = team["Round 2"] if "Round 2" in team else ("x", "x", None)
-            r3_time, r3_table, _ = team["Round 3"] if "Round 3" in team else ("x", "x", None)
-            project_time, project_room, _ = team["Project"] if "Project" in team else ("x", "x", None)
-            design_time, design_room, _ = team["Design"] if "Design" in team else ("x", "x", None)
+            for te in teamevents.itertuples():
+                if te.RoundNo == 0:
+                    strevents[te.EventName] = (te.Time.strftime("%I:%M %p"), te.Room)
+                else:
+                    strevents[f"Round {te.RoundNo}"] = (te.Time.strftime("%I:%M %p"), te.Room)
+            teamname = Tournament.config.team.teamnos_to_names[int(teamno)]
 
             t.add_row((teamno,
                        teamname,
-                       r1_time.strftime("%I:%M %p") if r1_time != "x" else "x",
-                       r1_table,
-                       r2_time.strftime("%I:%M %p") if r2_time != "x" else "x",
-                       r2_table,
-                       r3_time.strftime("%I:%M %p") if r3_time != "x" else "x",
-                       r3_table,
-                       project_time.strftime("%I:%M %p") if project_time != "x" else "x",
-                       project_room,
-                       design_time.strftime("%I:%M %p") if design_time != "x" else "x",
-                       design_room))
+                       strevents["Round 1"][0],
+                       strevents["Round 1"][1],
+                       strevents["Round 2"][0],
+                       strevents["Round 2"][1],
+                       strevents["Round 3"][0],
+                       strevents["Round 3"][1],
+                       strevents["Project"][0],
+                       strevents["Project"][1],
+                       strevents["Design"][0], 
+                       strevents["Design"][1],))
             t.add_hline()
 
     doc.generate_pdf('team_schedule', clean_tex=False)
