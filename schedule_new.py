@@ -3,8 +3,14 @@ import numpy as np
 import pandas as pd
 
 class Tournament:
-    def __init__(self, config):
+    def __init__(self, config, verbose=True, veryverbose=False):
         self.config = config
+        self.verbose = verbose
+        self.veryverbose = veryverbose
+        if self.veryverbose:
+            self.verbose = True
+
+
         self.events = pd.DataFrame(columns=[
             "Time", "EventName", "RoundNo", "Room", "Duration", "Team"
         ])
@@ -16,7 +22,7 @@ class Tournament:
         # self.events = [] # All events in the tournament
         # self.events_by_team = {} # {teamno : [Events]}
         self.nteams = self.config.tournament.nteams
-        self.teamid_keys = [str(k) for k in range(1, 1 + self.nteams)]
+        self.teamid_keys = [k for k in range(1, 1 + self.nteams)]
 
         self.lunch_start = self.config.day.lunch_start
         self.lunch_end = self.config.day.lunch_end
@@ -26,16 +32,16 @@ class Tournament:
         self.get_judging_times()
         self.get_match_times()
         
-        breakpoint()
         # Strategy for template:
         # 1. Fix the Judging rounds
-
         self.assign_judging()
-        # 2. Match Table Round 1. 
-        # 3. Match Table Round 3. 
-        # 4. Match Table Round 2 - Try n times, then start over.
+
+        # 2. Fix the Match rounds
+        self.assign_all_matches()
         
-        self.verify_schedule() 
+        # 3. Verify the schedule (assign_all_matches already does this, but JUUST IN CASE)
+        self.veryverbose = True
+        valid_schedule = self.verify_schedule() 
 
         # When a team is found, save the template. 
         # Then, create a way for us to insert the template file into the constructor. 
@@ -179,6 +185,66 @@ class Tournament:
 
         self.events = pd.concat([self.events, pd.DataFrame(match_events)], ignore_index=True)
 
+    def assign_match_round(self, roundno):
+        self.clear_table_events(roundno)
+
+        table_events = self.events[self.events["RoundNo"] == roundno]
+
+        teamnos = self.teamid_keys.copy()
+        np.random.shuffle(teamnos)
+
+        assert len(teamnos) == len(table_events), "Team assignment length mismatch!"
+
+        table_events.loc[:, "Team"] = teamnos
+
+        # Update self.events
+        self.events.update(table_events)
+
+    def assign_all_matches(self, max_startovers=1000, max_r1 = 1e5, max_r2 = 4e5, max_r3=16e5):
+        for m in range(max_startovers):
+            print(f"STARTING MATCH ASSIGNMENT ATTEMPT {m}..")
+            # Try round 1
+            for i in range(int(max_r1)):
+                self.assign_match_round(1)
+                if self.verbose and i%1000 == 0:
+                    print(f"  Trying round 1 assignment attempt {i}...")
+                if self.verify_schedule(check_opponents=False, check_table_diversity=False):
+                    break
+
+            if self.verify_schedule(check_opponents=False, check_table_diversity=False):
+                if self.verbose:
+                    print("FOUND ROUND 1 ASSIGNMENT AFTER ", i, "ATTEMPTS")
+            else:
+                continue
+
+            # Try round 2
+            for i in range(int(max_r2)):
+                self.assign_match_round(2)
+                if self.verbose and i%1000 == 0:
+                    print(f"  Trying round 2 assignment attempt {i}...")
+                if self.verify_schedule(check_opponents=True, check_table_diversity=False):
+                    break
+
+            if self.verify_schedule(check_opponents=True, check_table_diversity=False):
+                if self.verbose:
+                    print("FOUND ROUND 2 ASSIGNMENT AFTER ", i, "ATTEMPTS")
+            else:
+                continue
+
+            # Try round 3
+            for i in range(int(max_r3)):
+                print("GENERATING ROUND 3 ATTEMPT ", i)
+                self.assign_match_round(3)
+                if self.verbose and i%1000 == 0:
+                    print(f"  Trying round 3 assignment attempt {i}...")
+                if self.verify_schedule(check_opponents=True, check_table_diversity=True):
+                    break
+            
+            if self.verbose:
+                print("FOUND ROUND 3 ASSIGNMENT AFTER ", i, "ATTEMPTS")
+                return True
+        return False
+
     #################################################
     ################### UTILITIES ###################
     #################################################
@@ -191,9 +257,9 @@ class Tournament:
     # roundno = -1 means all rounds
     def clear_table_events(self, roundno=-1):
         if roundno == -1:
-            self.events = self.events[self.events["RoundNo"] != 0]
+            self.events.loc[self.events["RoundNo"] != 0, "Team"] = -1
         else:
-            self.events = self.events[self.events["RoundNo"] != roundno]
+            self.events.loc[self.events["RoundNo"] == roundno, "Team"] = -1
 
     # To get a specific team, do this.get_group(teamno)
     def get_events_by_team(self):
@@ -210,28 +276,47 @@ class Tournament:
     ################### VERIFICATION FUNCTIONS ###################
     ##############################################################
 
-    # table_noval = True means - ignore Table-related verification
-    # (e.g. see different oppoenents, see as many tables as possible)
-    # It would only check if there are no overlaps & sufficient gaps.
-    def verify_schedule(self, table_noval = False):
+    # check_opponents: check that teams have different opponents each round
+    # check_table_diversity: check that teams see as many different tables as possible
+    def verify_schedule(self, check_opponents = True, check_table_diversity = True):
         # Verify all teams have all events!!
         # Verify no overlaps for teams
         no_overlaps = self.verify_no_team_overlaps()
         if not no_overlaps:
-            print("Schedule verification failed: team overlaps found.")
+            if self.veryverbose:
+                print("Schedule verification failed: team overlaps found.")
             return False
 
         # Verify "gap" between events is >= whatever config says
         gap_ok, fail_team = self.verify_event_gap()
         if not gap_ok:
-            print(f"Schedule verification failed: team {fail_team} has insufficient gap between events.")
+            if self.veryverbose:
+                print(f"Schedule verification failed: team {fail_team} has insufficient gap between events.")
             return False
         
-        if table_noval:
-            return True
-
-        # Make sure all teams see as many tables as possible. 
         # Make sure all teams have different opponents for each table round
+        if check_opponents:
+            opps = self.verify_opponent_diversity()
+            if not opps:
+                if self.veryverbose:
+                    print("Schedule verification failed: teams have repeated opponents.")
+                return False
+        
+        # Make sure all teams see as many tables as possible.
+        if check_table_diversity:
+            for i in range(25):
+                table_div = self.verify_table_diversity()
+                if table_div == -1:
+                    break
+                print("Just found broken team:", table_div)
+                if self.veryverbose:
+                    print(f"Schedule verification: team {table_div} doesn't see enough tables. Attempting to fix...")
+
+                self.fix_table_diversity(table_div)
+
+            if table_div != -1:
+                return False # We failed to fix the table diversity issue.
+
 
         # All checks passed!!
         return True 
@@ -242,7 +327,8 @@ class Tournament:
             time_blocks = self.get_team_events_interval_list(teamno)
             # Check for overlaps
             if TimeUtils.contains_overlap(time_blocks):
-                print(f"Team {teamno} has overlapping events.")
+                if self.veryverbose:
+                    print(f"Team {teamno} has overlapping events.")
                 return False
         return True
     
@@ -255,8 +341,71 @@ class Tournament:
                 prev_end = TimeUtils.add_times(time_blocks[i - 1][0], time_blocks[i - 1][1])
                 curr_start = time_blocks[i][0]
                 gap = TimeUtils.subtract_times(curr_start, prev_end)
-                print(curr_start, prev_end, gap, self.config.team.time_between_events)
                 if gap < self.config.team.time_between_events:
+                    if self.veryverbose:
+                        print(f"Team {teamno} has insufficient gap between events.")
                     return False, teamno
                 
         return True, -1
+    
+    def verify_opponent_diversity(self):
+        tablerounds = self.events[(self.events["RoundNo"] != 0) & (self.events["Team"] != -1)]
+        match_groups = tablerounds.groupby(by=["Time"])
+        match_tuples = (match_groups["Team"]).apply(lambda x: tuple(sorted(x)))
+        if len(set(match_tuples)) != len(match_tuples):
+            return False
+        return True
+
+    def see_unique_tables(self, teamno):
+        tablerounds = self.events[(self.events["RoundNo"] != 0) & (self.events["Team"] != -1)]
+        team_groups = tablerounds.groupby(by=["Team"])
+        team_rounds = team_groups.get_group((teamno, ))
+        tables_seen = team_rounds["Room"].unique()
+        return len(tables_seen) == min(self.config.tournament.ntable_rounds, self.config.tournament.ntables)
+
+    def verify_table_diversity(self):
+        for team in self.teamid_keys:
+            if not self.see_unique_tables(team):
+                if self.veryverbose:
+                    print(f"Team {team} has insufficient table diversity.")
+                return team
+        return -1
+    
+    def fix_table_diversity(self, teamno):
+        # Find this team's table rounds and their opponents
+        tablerounds = self.events[(self.events["RoundNo"] != 0) & (self.events["Team"] == teamno)]
+        tabletimes = tablerounds["Time"].values
+        teams_we_care_about = self.events[(self.events["RoundNo"] != 0) & \
+                                (self.events["Time"].isin(tabletimes))]["Team"].unique().tolist()
+        print(tablerounds)
+        
+        # swap round 1 opponent and see if it fixes the problem
+        for round in range(1, 4):
+            round_time = tablerounds[tablerounds["RoundNo"] == round]["Time"]
+            round_match = self.events[(self.events["Time"] == round_time.values[0]) & \
+                                       (self.events["RoundNo"] == round)]
+            round_match.loc[:, "Team"] = round_match["Team"][::-1].values
+            self.events.update(round_match)
+
+            # check if the 4 teams we are messing with have been fixed
+            fixed = True
+            for team in teams_we_care_about:
+                fixed &= self.see_unique_tables(team)
+                print(team, fixed)
+            print("FIXED?", fixed)
+
+            # swap back if it didn't fix
+            if not fixed:
+                round_match.loc[:, "Team"] = round_match["Team"][::-1].values
+                self.events.update(round_match)
+            else:
+                print("FIXED!, swapped round ", round)
+                return 
+            
+    # save the df to a csv
+    def save_schedule_csv(self, filename):
+        self.events.to_csv(filename, index=False)
+
+    # get from csv
+    def load_schedule_csv(self, filename):
+        self.events = pd.read_csv(filename)
