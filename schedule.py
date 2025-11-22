@@ -49,7 +49,7 @@ class Tournament:
             self.create_template()
 
             # Save the events schedule to a CSV. - filename is tournament_schedule{time}.csv
-            self.save_schedule_csv(f"output/tournament_schedule{TimeUtils.get_current_time_str()}.csv")
+            self.save_schedule_csv(f"output/tournament_schedule_template_{TimeUtils.get_current_time_str()}.csv")
 
         self.valid_template = self.verify_schedule(check_opponents=True, check_table_diversity=True)
         assert self.valid_template, "Template is not valid. Will not generate new documents. "
