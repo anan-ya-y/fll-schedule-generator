@@ -1,36 +1,52 @@
 from utils import TimeUtils, Event
+from config import Config, SubConfig
 import numpy as np
 import json
 import pandas as pd
 
 class Tournament:
-    def __init__(self, config, verbose=True, veryverbose=False, strategy_randomize="matches", csvfile=None, tournament_details_json="tournament_details.json"):
-        self.config = config
+    def __init__(self, config=None, verbose=True, veryverbose=False, strategy_randomize="matches", csvfile=None, tournament_details_json="tournament_details.json"):
         self.verbose = verbose
         self.veryverbose = veryverbose
         if self.veryverbose:
             self.verbose = True
 
-        if csvfile is not None:
-            self.load_schedule_csv(csvfile)
-            return
-        
-        self.strategy_randomize = strategy_randomize
-
-
-        self.events = pd.DataFrame(columns=[
-            "Time", "EventName", "RoundNo", "Room", "Duration", "Team"
-        ])
-        # EventName = "Project", "Design", "Table", "Opening/Closing/etc"
-        # RoundNo = 0 if not a table round, else 1, 2, or 3
-        # Team = -1 = unassigned, -2 = break/no team
+        self.config = config if config is not None else Config()
 
         self.nteams = self.config.tournament.nteams
         self.teamid_keys = [k for k in range(1, 1 + self.nteams)]
 
-        self.lunch_start = self.config.day.lunch_start
-        self.lunch_end = self.config.day.lunch_end
 
+        if csvfile is not None:
+            self.load_schedule_csv(csvfile)
+        else:
+            self.strategy_randomize = strategy_randomize
+
+            self.events = pd.DataFrame(columns=[
+                "Time", "EventName", "RoundNo", "Room", "Duration", "Team"
+            ])
+            # EventName = "Project", "Design", "Table", "Opening/Closing/etc"
+            # RoundNo = 0 if not a table round, else 1, 2, or 3
+            # Team = -1 = unassigned, -2 = break/no team
+
+            self.lunch_start = self.config.day.lunch_start
+            self.lunch_end = self.config.day.lunch_end
+
+            self.create_template()
+
+            # Save the events schedule to a CSV. - filename is tournament_schedule{time}.csv
+            self.save_schedule_csv(f"tournament_schedule{TimeUtils.get_current_time_str()}.csv")
+
+        # Read tournament details json
+        with open(tournament_details_json, 'r') as f:
+            tournament_details = json.load(f)
+        self.set_team_list(tournament_details["teamlist"])
+        self.assign_teams_to_judging()
+        self.set_room_names(tournament_details) 
+        # Turn all items in the "teamno" column to int
+        self.events["Team"] = self.events["Team"].astype(int)
+
+    def create_template(self):        
         # Strategy: Create a template of events. 
         # Then, assign teams by distance. 
         self.get_judging_times()
@@ -55,15 +71,6 @@ class Tournament:
         # Create lunch events for each room 
         self.create_lunch_events()
 
-        # Save the events schedule to a CSV. - filename is tournament_schedule{time}.csv
-        self.save_schedule_csv(f"tournament_schedule{TimeUtils.get_current_time_str()}.csv")
-
-        # Read tournament details json
-        with open(tournament_details_json, 'r') as f:
-            tournament_details = json.load(f)
-        self.set_team_list(tournament_details["teamlist"])
-        self.assign_teams_to_judging()
-        self.set_room_names(tournament_details) 
 
     def set_team_list(self, filename):
         self.config.team.team_list = pd.read_csv(filename)
@@ -565,3 +572,6 @@ class Tournament:
     # get from csv
     def load_schedule_csv(self, filename):
         self.events = pd.read_csv(filename)
+
+        # Turn all "Time" column into datetime.time objects
+        self.events["Time"] = pd.to_datetime(self.events["Time"]).dt.time
