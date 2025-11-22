@@ -48,6 +48,7 @@ def create_team_schedule(Tournament):
 
         teamnos = Tournament.events["Team"].unique().tolist()
         teamnos.sort(key=lambda x: int(x))
+        teamnos = [tn for tn in teamnos if tn > 0]  # remove dummy teams
         for teamno in teamnos:
             teamevents = Tournament.get_events_by_team().get_group(teamno)
             strevents = {
@@ -95,7 +96,10 @@ def create_judging_schedule(Tournament):
     judging_events = pd.concat([project_events, design_events])
     all_rooms = sorted(judging_events["Room"].unique().tolist())
 
-    all_times = judging_events["Time"].unique().tolist()
+    # Get all events in each of the judging rooms (including breaks. )
+    all_judge_room_events = events[events["Room"].isin(all_rooms)]
+
+    all_times = all_judge_room_events["Time"].unique().tolist()
     all_times.sort()
 
     tabular = "|c" * (1 + len(all_rooms)) + "|"
@@ -106,13 +110,25 @@ def create_judging_schedule(Tournament):
         t.add_hline()
 
         for time in all_times:
-            timeevents = judging_events.groupby(by="Time").get_group(time)
+            timeevents = all_judge_room_events.groupby(by="Time").get_group(time)
+            # ALL the events at this time in this room 
             roomevents = {r: 
                           timeevents[timeevents["Room"] == r].iloc[0].to_dict() for r in all_rooms}
+            
+            roomevent_display_items = []
+            for r in all_rooms:
+                if r in roomevents:
+                    display_item = roomevents[r]["TeamName"]
+                    if roomevents[r]["Team"] > 0:
+                        display_item = f'{roomevents[r]["Team"]}: {display_item}'
+                else:
+                    display_item = ""
+                roomevent_display_items.append(display_item)
+
             t.add_row(
                 tuple(
                     [time.strftime("%I:%M %p")] +
-                    [f'{roomevents[r]["Team"]}: {roomevents[r]["TeamName"]}' if r in roomevents else "" for r in all_rooms]
+                    roomevent_display_items
                 )
             )
 
