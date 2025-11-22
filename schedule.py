@@ -1,9 +1,10 @@
 from utils import TimeUtils, Event
 import numpy as np
+import json
 import pandas as pd
 
 class Tournament:
-    def __init__(self, config, verbose=True, veryverbose=False, csvfile=None, strategy_randomize="matches"):
+    def __init__(self, config, verbose=True, veryverbose=False, strategy_randomize="matches", csvfile=None, tournament_details_json="tournament_details.json"):
         self.config = config
         self.verbose = verbose
         self.veryverbose = veryverbose
@@ -54,10 +55,33 @@ class Tournament:
         # Create lunch events for each room 
         self.create_lunch_events()
 
-        # When a team is found, save the template. 
-        # Then, create a way for us to insert the template file into the constructor. 
-        # Fill in teams by distance/latest judging order. 
+        # Save the events schedule to a CSV. - filename is tournament_schedule{time}.csv
+        self.save_schedule_csv(f"tournament_schedule{TimeUtils.get_current_time_str()}.csv")
+
+        # Read tournament details json
+        with open(tournament_details_json, 'r') as f:
+            tournament_details = json.load(f)
+        self.set_team_list(tournament_details["teamlist"])
         self.assign_teams_to_judging()
+        self.set_room_names(tournament_details) 
+
+    def set_team_list(self, filename):
+        self.config.team.team_list = pd.read_csv(filename)
+        self.config.team.team_list.loc[:, "Team Name"] = self.config.team.team_list["Team Name"].str.strip()
+        self.config.team.team_list.loc[:, "Distance"] = self.config.team.team_list["Distance"].astype(float)
+        self.config.team.teamnos_to_names = {row["Team Number"]: row["Team Name"] for _, row in self.config.team.team_list.iterrows()}
+
+    def set_room_names(self, tournament_details):
+        project_rooms = tournament_details["project_rooms"]
+        design_rooms = tournament_details["design_rooms"]
+
+        # replace all occurrences of P1, P2, ... and D1, D2, ... in self.events
+        for i, room_name in enumerate(project_rooms):
+            self.events.loc[self.events["Room"] == f"P{i+1}", "Room"] = room_name
+
+        for i, room_name in enumerate(design_rooms):
+            self.events.loc[self.events["Room"] == f"D{i+1}", "Room"] = room_name
+
 
     def create_lunch_events(self):
         all_rooms = self.events["Room"].unique().tolist()
@@ -359,7 +383,7 @@ class Tournament:
         
         all_earliest_times.sort(key=lambda x: x[0]) # sort by earliest judging time
         # get all teams by distance
-        all_teams_to_dists = [(y, x) for x, y in self.config.team.teamnos_to_distances.items()]
+        all_teams_to_dists = [(y, x) for x, y in zip(self.config.team.team_list["Team Number"], self.config.team.team_list["Distance"])]
         all_teams_to_dists.sort(key=lambda x: x[0]) # sort by distance
 
         self.events["Team ID"] = self.events["Team"] 

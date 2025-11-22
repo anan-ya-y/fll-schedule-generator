@@ -42,6 +42,11 @@ class TimeUtils:
                 return True
         return False
     
+    @staticmethod
+    def get_current_time_str():
+        now = datetime.datetime.now()
+        return now.strftime("%Y%m%d_%H%M%S")
+    
 class Event:
     def __init__(self, time, title, room, duration, eventtype=None, team=-1):
         self.time = time

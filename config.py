@@ -28,8 +28,8 @@ class Config:
         self.tournament.njudging_rooms = 2 # per type (total = 4 if this =2)
         self.tournament.ntables = 2
         self.tournament.ntable_rounds = 3
-        self.tournament.design_room_names = ["D1", "D2"]
-        self.tournament.project_room_names = ["P1", "P2"]
+        # self.tournament.design_room_names = ["D1", "D2"]
+        # self.tournament.project_room_names = ["P1", "P2"]
         
         # TABLE ROUNDS CONFIGURATION. 
         self.table = SubConfig()
@@ -57,7 +57,6 @@ class Config:
         # TEAM STUFF - this does NOT get saved to .JSON!!
         self.team = SubConfig()
         self.team.time_between_events = 10 # minutes; minimum time between end of 1 event and start of next. 
-        self.team.teamlist_file = "teamlist.csv"
 
         # do not touch. 
         self.process()
@@ -75,26 +74,29 @@ class Config:
 
         self.team.teamlist_file = "teamlist.csv"
         # read csv, turn it into df
-        self.team.teamlist = pd.read_csv(self.team.teamlist_file)
+        # self.team.teamlist = pd.read_csv(self.team.teamlist_file)
 
-        self.team.teamnames = self.team.teamlist["Team Name"].tolist()
-        self.team.teamnos = self.team.teamlist["Team Number"].tolist()
+        # self.team.teamnames = self.team.teamlist["Team Name"].tolist()
+        # self.team.teamnos = self.team.teamlist["Team Number"].tolist()
 
-        assert len(self.team.teamnames) == self.tournament.nteams, "Number of teams in teamlist does not match nteams in config."
+        # assert len(self.team.teamnames) == self.tournament.nteams, "Number of teams in teamlist does not match nteams in config."
 
-        if len(self.team.teamnos) % 2 == 1:
-            self.team.teamnames.append("XXX")
-            self.team.teamnos.append(9999)  # dummy team number
-            # add to self.team.teamlist
-            self.team.teamlist = pd.concat([self.team.teamlist, pd.DataFrame([{"Team Name": "XXX", "Team Number": 9999, "Distance": 0}])], ignore_index=True)
+        if self.tournament.nteams % 2 == 1:
+            # self.team.teamnames.append("XXX")
+            # self.team.teamnos.append(9999)  # dummy team number
+            # # add to self.team.teamlist
+            # self.team.teamlist = pd.concat([self.team.teamlist, pd.DataFrame([{"Team Name": "XXX", "Team Number": 9999, "Distance": 0}])], ignore_index=True)
             self.tournament.nteams += 1
 
-        assert len(self.team.teamnames) == self.tournament.nteams, "Number of teams in teamlist does not match nteams in config."
+        # assert len(self.team.teamnames) == self.tournament.nteams, "Number of teams in teamlist does not match nteams in config."
 
-        self.team.teamnos_to_names = {row["Team Number"]: row["Team Name"].strip() for _, row in self.team.teamlist.iterrows()}
-        self.team.teamnos_to_distances = {row["Team Number"]: row["Distance"] for _, row in self.team.teamlist.iterrows()}
+        # self.team.teamnos_to_names = {row["Team Number"]: row["Team Name"].strip() for _, row in self.team.teamlist.iterrows()}
+        # self.team.teamnos_to_distances = {row["Team Number"]: row["Distance"] for _, row in self.team.teamlist.iterrows()}
 
-        self.day.lunch_end = TimeUtils.add_times(self.day.lunch_start, self.day.nminutes_lunch)    
+        self.day.lunch_end = TimeUtils.add_times(self.day.lunch_start, self.day.nminutes_lunch) 
+
+        self.tournament.design_room_names = [f"D{i+1}" for i in range(self.tournament.ndesign_rooms)]
+        self.tournament.project_room_names = [f"P{i+1}" for i in range(self.tournament.nproject_rooms)]
 
     def to_json(self, filename):
         import json
