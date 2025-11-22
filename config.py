@@ -46,11 +46,11 @@ class Config:
         # DAY CONFIGURATION
         self.day = SubConfig()
         self.day.lunch_start = "12:00"
-        self.day.nminutes_lunch = 40
+        self.day.nminutes_lunch = 30
         self.day.start_time = "9:00"
         self.day.opening_ceremony_duration = 20
-        self.day.matches_start_time = "9:35"
-        self.day.judging_prep = 25 # # of minutes between end of opening ceremony & first judging
+        self.day.matches_start_time = "9:30"
+        self.day.judging_prep = 10 # # of minutes between end of opening ceremony & first judging
         self.day.closing_ceremony_time = "17:00"
         self.day.closing_ceremony_duration = 45
 

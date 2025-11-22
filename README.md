@@ -21,7 +21,7 @@ Create tournament_details.json with the following information:
 `teamlist.csv` should be formatted like so:
 
 ```
-Team Number,Team Name,Distance
+Team #,Team Name,Distance
 46, Amazing team 46, 46 
 23, Amazing team 23, 23 
 ...
