@@ -1,5 +1,6 @@
 from schedule import Tournament
 from utils import Event
+from utils import TimeUtils
 import pandas as pd
 from pylatex.utils import NoEscape
 from pylatex import (
@@ -11,6 +12,46 @@ from pylatex import (
 
 def bold(x):
     return NoEscape(r'\textbf{' + str(x) + '}')
+
+def create_fllt(Tournament, date_str="1/1/25"):
+    def get_event_description(row):
+        if row["EventName"] == "Table":
+            return f"Table Round {row['RoundNo']}"
+        else:
+            return row["EventName"] + " Judging"
+    
+    events = Tournament.events.copy()
+    events = events[events["EventName"].isin(["Table", "Project", "Design"])]
+
+    # Replace all "Design" with "Robot"
+    events.loc[events["EventName"] == "Design", "EventName"] = "Robot"
+
+    # Create the FLLT columns
+    events["Date"] = date_str
+    events["Begin Time"] = events["Time"].apply(lambda x: x.strftime("%H:%M"))
+    events["End Time"] = events.apply(lambda x: (TimeUtils.add_times(x["Time"], x["Duration"])).strftime("%H:%M"), axis=1)
+    events["Type"] = events["EventName"]
+    events["Round"] = events["RoundNo"].apply(lambda x: min(1, x))
+    events["Description"] = events.apply(get_event_description, axis=1)    
+    events["Room"] = events["Room"]
+    events["Team #"] = events["Team"]
+    events["Team Name"] = events["TeamName"]
+
+    fllt_columns = [
+        "Date",
+        "Begin Time",
+        "End Time",
+        "Type",
+        "Round",
+        "Description",
+        "Room",
+        "Team #",
+        "Team Name",
+    ]
+    fllt_events = events[fllt_columns]
+    fllt_events = fllt_events.sort_values(by=["Begin Time", "Room"])
+    fllt_events.to_csv("fllt_schedule.csv", index=False)
+
 
 def create_doc(landscape=False):
     doc = Document()
@@ -27,6 +68,20 @@ def create_team_schedule(Tournament):
     doc.append(NoEscape(r'\sffamily'))
     doc.append(NoEscape(r'\def\arraystretch{1.5}'))
     doc.append(NoEscape(r'\rowcolors{2}{gray!0}{gray!10}'))
+
+    opening_ceremony_start = Tournament.config.day.start_time.strftime("%I:%M %p")
+    opening_ceremony_end = TimeUtils.add_times(
+        Tournament.config.day.start_time, 
+        Tournament.config.day.opening_ceremony_duration
+    ).strftime("%I:%M %p")
+
+    lunch_start = Tournament.config.day.lunch_start.strftime("%I:%M %p")
+    lunch_end = TimeUtils.add_times(
+        Tournament.config.day.lunch_start, 
+        Tournament.config.day.nminutes_lunch
+    ).strftime("%I:%M %p")
+
+    closing_ceremony_start = Tournament.config.day.closing_ceremony_time.strftime("%I:%M %p")
 
     with doc.create(Tabular("|rl|cc|cc|cc|cc|cc|")) as t:
         t.add_hline()
@@ -79,6 +134,11 @@ def create_team_schedule(Tournament):
                        strevents["Design"][0], 
                        strevents["Design"][1],))
             t.add_hline()
+    
+    doc.append("\n\nOpening Ceremony: " + opening_ceremony_start + " - " + opening_ceremony_end)
+    doc.append("\nLunch: " + lunch_start + " - " + lunch_end)
+    doc.append("\nClosing Ceremony: " + closing_ceremony_start + "\n\n")
+    doc.append(NoEscape(r'\vspace{0.2in}'))
 
     doc.generate_pdf('team_schedule', clean_tex=False)
 
