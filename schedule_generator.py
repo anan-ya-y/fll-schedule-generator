@@ -3,7 +3,7 @@ import schedule_latex as sln
 from schedule import Tournament
 
 c = Config()
-t = Tournament(c)#, csvfile="tournament_schedule.csv")
+t = Tournament(csvfile="output/tournament_schedule_template.csv")#, csvfile="tournament_schedule.csv")
 sln.create_team_schedule(t)
 sln.create_judging_schedule(t)
 sln.create_ref_schedule(t)
