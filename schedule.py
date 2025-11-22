@@ -22,6 +22,7 @@ class Tournament:
         ])
         # EventName = "Project", "Design", "Table", "Opening/Closing/etc"
         # RoundNo = 0 if not a table round, else 1, 2, or 3
+        # Team = -1 = unassigned, -2 = break/no team
 
         self.nteams = self.config.tournament.nteams
         self.teamid_keys = [k for k in range(1, 1 + self.nteams)]
@@ -50,11 +51,27 @@ class Tournament:
         self.veryverbose = True
         valid_schedule = self.verify_schedule() 
 
+        # Create lunch events for each room 
+        self.create_lunch_events()
+
         # When a team is found, save the template. 
         # Then, create a way for us to insert the template file into the constructor. 
         # Fill in teams by distance/latest judging order. 
-
         self.assign_teams_to_judging()
+
+    def create_lunch_events(self):
+        all_rooms = self.events["Room"].unique().tolist()
+        lunch_events = []
+        for room in all_rooms:
+            lunch_events.append({
+                "Time": self.lunch_start,
+                "EventName": "Lunch",
+                "RoundNo": 0,
+                "Room": room,
+                "Duration": self.config.day.nminutes_lunch,
+                "Team": -2
+            })
+        self.events = pd.concat([self.events, pd.DataFrame(lunch_events)], ignore_index=True)
 
     # Returns the judging slots. 
     def get_judging_times(self):
@@ -68,35 +85,18 @@ class Tournament:
                                 self.config.tournament.ndesign_rooms
         n_judging_slots = np.ceil((self.config.tournament.nteams * 2) / total_judging_rooms).astype(int)
 
-        judging_times = []
+        all_rooms = self.config.tournament.project_room_names + \
+                    self.config.tournament.design_room_names
+
+        judging_events = []
         next_judging_time = judging_start_time
         # create the list of judging times. 
         for i in range(1, 1 + n_judging_slots):
             start_time = next_judging_time
-            judging_times.append(start_time)
-
-            total_slot_length = self.config.judging.nminutes_judging + \
-                                self.config.judging.nminutes_between_judging
-            next_judging_time = TimeUtils.add_times(next_judging_time, total_slot_length)
-
-            if i % self.config.judging.nteams_per_judging_sprint == 0:
-                next_judging_time = TimeUtils.add_times(
-                    next_judging_time,
-                    self.config.judging.nminutes_between_judging
-                )
-
-            # # Make sure no judging runs through lunch
-            if TimeUtils.contains_overlap([(self.lunch_start, self.config.day.nminutes_lunch),
-                                           (next_judging_time, self.config.judging.nminutes_judging)]):
-                next_judging_time = self.lunch_end
-
-        # Add judging times to self.events
-        judging_events = []
-        for j_time in judging_times:
             # design rooms
             for design_room in self.config.tournament.design_room_names:
                 judging_events.append({
-                    "Time": j_time,
+                    "Time": start_time,
                     "EventName": "Design",
                     "RoundNo": 0,
                     "Room": design_room,
@@ -107,23 +107,48 @@ class Tournament:
             # project rooms
             for project_room in self.config.tournament.project_room_names:
                 judging_events.append({
-                    "Time": j_time,
+                    "Time": start_time,
                     "EventName": "Project",
                     "RoundNo": 0,
                     "Room": project_room,
                     "Duration": self.config.judging.nminutes_judging,
                     "Team": -1
                 })
+
+            total_slot_length = self.config.judging.nminutes_judging + \
+                                self.config.judging.nminutes_between_judging
+            next_judging_time = TimeUtils.add_times(next_judging_time, total_slot_length)
+
+            if i % self.config.judging.nteams_per_judging_sprint == 0:
+                judging_events.extend([{
+                    "Time": next_judging_time,
+                    "EventName": "Break", 
+                    "RoundNo": 0, 
+                    "Room": room, 
+                    "Duration": self.config.judging.nminutes_between_judging,
+                    "Team": -2
+                } for room in all_rooms])
+                next_judging_time = TimeUtils.add_times(
+                    next_judging_time,
+                    self.config.judging.nminutes_between_judging
+                )
+
+            # # Make sure no judging runs through lunch
+            if TimeUtils.contains_overlap([(self.lunch_start, self.config.day.nminutes_lunch),
+                                           (next_judging_time, self.config.judging.nminutes_judging)]):
+                next_judging_time = self.lunch_end
+
         self.events = pd.concat([self.events, pd.DataFrame(judging_events)], ignore_index=True)
 
     # Create judging assignments - no verification
+    # randomized judging assignments. 
     def assign_judging(self, eventtype):
         self.clear_judging_events(eventtype)
 
         events = self.events[self.events["EventName"] == eventtype]
         events_sorted = events.sort_values(by=["Room", "Time"], ascending=True)
         teamnos = self.teamid_keys.copy()
-        np.random.shuffle(teamnos)
+        np.random.shuffle(teamnos).astype(int)
         events_sorted.loc[:, "Team"] = teamnos
         # Update self.events
         self.events.update(events_sorted)
@@ -312,12 +337,14 @@ class Tournament:
                 return True
         return False
 
+    # Assign teams from teamlist.csv to the actual judging times. 
     def assign_teams_to_judging(self):
         all_earliest_times = [] # (earliest_time, teamno)
         
         for teamno in self.teamid_keys:
             team_events = self.get_events_by_team().get_group(teamno)
             judging_events = team_events[team_events["RoundNo"] == 0]
+            judging_events = judging_events[judging_events["Team"] >= 0]  # remove breaks/no team
             judging_times = judging_events["Time"].values
             earliest_judging_time = min(judging_times)
             all_earliest_times.append((earliest_judging_time, teamno))
@@ -328,7 +355,6 @@ class Tournament:
         all_teams_to_dists.sort(key=lambda x: x[0]) # sort by distance
 
         self.events["Team ID"] = self.events["Team"] 
-        self.events.loc[:, "Team"] = -1
 
         for x, y in zip(all_earliest_times, all_teams_to_dists):
             earliest_time, teamid = x
@@ -336,6 +362,10 @@ class Tournament:
 
             self.events.loc[self.events["Team ID"] == teamid, "Team"] = teamno
             self.events.loc[self.events["Team ID"] == teamid, "TeamName"] = self.config.team.teamnos_to_names[teamno]
+            
+        break_events = self.events[self.events["Team"] == -2]
+        break_events.loc[:, "TeamName"] = break_events.loc[:, "EventName"]
+        self.events.update(break_events)
 
         return True
 
