@@ -82,7 +82,7 @@ class Tournament:
         
         all_earliest_times.sort(key=lambda x: x[0]) # sort by earliest judging time
         # get all teams by distance
-        all_teams_to_dists = [(y, x) for x, y in zip(self.config.team.team_list["Team Number"], self.config.team.team_list["Distance"])]
+        all_teams_to_dists = [(y, x) for x, y in zip(self.config.team.team_list["Team #"], self.config.team.team_list["Distance"])]
         all_teams_to_dists.sort(key=lambda x: x[0]) # sort by distance
 
         self.events["Team ID"] = self.events["Team"] 
@@ -104,7 +104,6 @@ class Tournament:
         self.config.team.team_list = pd.read_csv(filename)
         self.config.team.team_list.loc[:, "Team Name"] = self.config.team.team_list["Team Name"].str.strip()
         self.config.team.team_list.loc[:, "Distance"] = self.config.team.team_list["Distance"].astype(float)
-        breakpoint()
         self.config.team.teamnos_to_names = {row["Team #"]: row["Team Name"] for _, row in self.config.team.team_list.iterrows()}
 
     def set_room_names(self, tournament_details):
