@@ -241,6 +241,14 @@ class Tournament:
             if i % nmatches_per_round == 0:
                 round_no += 1
                 # Add a break
+                match_events.extend([{
+                    "Time": next_match_time,
+                    "EventName": "Break",
+                    "RoundNo": 0,
+                    "Room": f"Table {tableno}",
+                    "Duration": self.config.table.match_break_duration,
+                    "Team": -2
+                } for tableno in range(1, 1 + self.config.tournament.ntables)])
                 next_match_time = TimeUtils.add_times(
                     next_match_time,
                     self.config.table.match_break_duration
