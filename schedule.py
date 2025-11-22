@@ -5,7 +5,20 @@ import json
 import pandas as pd
 
 class Tournament:
-    def __init__(self, config=None, verbose=True, veryverbose=False, strategy_randomize="matches", csvfile=None, tournament_details_json="tournament_details.json"):
+    # IF generating from scratch, provide:
+    # config: Config object
+    # strategy_randomize: "matches" or "judging"
+    # 
+    # IF loading from CSV, provide:
+    # csvfile: path to CSV file
+    # 
+    # REGARDLESS OF STRATEGY, provide:
+    # tournament_details_json: path to JSON file with teamlist and room names (see readme.md for format)
+    # verbose: whether to print progress
+    # veryverbose: whether to print detailed progress    
+    def __init__(self, config=None, strategy_randomize="matches", 
+                 csvfile=None, tournament_details_json="tournament_details.json", 
+                 verbose=True, veryverbose=False):
         self.verbose = verbose
         self.veryverbose = veryverbose
         if self.veryverbose:
@@ -16,10 +29,11 @@ class Tournament:
         self.nteams = self.config.tournament.nteams
         self.teamid_keys = [k for k in range(1, 1 + self.nteams)]
 
-
+        # Create/fill template (self.events)
         if csvfile is not None:
             self.load_schedule_csv(csvfile)
         else:
+            # Generate the schedule template from scratch
             self.strategy_randomize = strategy_randomize
 
             self.events = pd.DataFrame(columns=[
@@ -37,14 +51,75 @@ class Tournament:
             # Save the events schedule to a CSV. - filename is tournament_schedule{time}.csv
             self.save_schedule_csv(f"tournament_schedule{TimeUtils.get_current_time_str()}.csv")
 
-        # Read tournament details json
+        self.valid_template = self.verify_schedule(check_opponents=True, check_table_diversity=True)
+        assert self.valid_template, "Template is not valid. Will not generate new documents. "
+
+        # Read tournament details json and fill team info into template
         with open(tournament_details_json, 'r') as f:
             tournament_details = json.load(f)
         self.set_team_list(tournament_details["teamlist"])
         self.assign_teams_to_judging()
         self.set_room_names(tournament_details) 
-        # Turn all items in the "teamno" column to int
+
+        # Minor bug correction: Turn all items in the "teamno" column to int
         self.events["Team"] = self.events["Team"].astype(int)
+    
+    #################################################
+    #### FOR FILLING TEMPLATE WITH TEAMS ####
+    #################################################
+
+    # Assign teams from teamlist.csv to the actual judging times. 
+    def assign_teams_to_judging(self):
+        all_earliest_times = [] # (earliest_time, teamno)
+        
+        for teamno in self.teamid_keys:
+            team_events = self.get_events_by_team().get_group(teamno)
+            judging_events = team_events[team_events["RoundNo"] == 0]
+            judging_events = judging_events[judging_events["Team"] >= 0]  # remove breaks/no team
+            judging_times = judging_events["Time"].values
+            earliest_judging_time = min(judging_times)
+            all_earliest_times.append((earliest_judging_time, teamno))
+        
+        all_earliest_times.sort(key=lambda x: x[0]) # sort by earliest judging time
+        # get all teams by distance
+        all_teams_to_dists = [(y, x) for x, y in zip(self.config.team.team_list["Team Number"], self.config.team.team_list["Distance"])]
+        all_teams_to_dists.sort(key=lambda x: x[0]) # sort by distance
+
+        self.events["Team ID"] = self.events["Team"] 
+
+        for x, y in zip(all_earliest_times, all_teams_to_dists):
+            earliest_time, teamid = x
+            dist, teamno = y
+
+            self.events.loc[self.events["Team ID"] == teamid, "Team"] = teamno
+            self.events.loc[self.events["Team ID"] == teamid, "TeamName"] = self.config.team.teamnos_to_names[teamno]
+            
+        break_events = self.events[self.events["Team"] == -2]
+        break_events.loc[:, "TeamName"] = break_events.loc[:, "EventName"]
+        self.events.update(break_events)
+
+        return True
+
+    def set_team_list(self, filename):
+        self.config.team.team_list = pd.read_csv(filename)
+        self.config.team.team_list.loc[:, "Team Name"] = self.config.team.team_list["Team Name"].str.strip()
+        self.config.team.team_list.loc[:, "Distance"] = self.config.team.team_list["Distance"].astype(float)
+        self.config.team.teamnos_to_names = {row["Team Number"]: row["Team Name"] for _, row in self.config.team.team_list.iterrows()}
+
+    def set_room_names(self, tournament_details):
+        project_rooms = tournament_details["project_rooms"]
+        design_rooms = tournament_details["design_rooms"]
+
+        # replace all occurrences of P1, P2, ... and D1, D2, ... in self.events
+        for i, room_name in enumerate(project_rooms):
+            self.events.loc[self.events["Room"] == f"P{i+1}", "Room"] = room_name
+
+        for i, room_name in enumerate(design_rooms):
+            self.events.loc[self.events["Room"] == f"D{i+1}", "Room"] = room_name
+
+    #################################################
+    #### CREATE TEMPLATE TOP LEVEL FUNCTIONS ####
+    #################################################
 
     def create_template(self):        
         # Strategy: Create a template of events. 
@@ -71,25 +146,8 @@ class Tournament:
         # Create lunch events for each room 
         self.create_lunch_events()
 
-
-    def set_team_list(self, filename):
-        self.config.team.team_list = pd.read_csv(filename)
-        self.config.team.team_list.loc[:, "Team Name"] = self.config.team.team_list["Team Name"].str.strip()
-        self.config.team.team_list.loc[:, "Distance"] = self.config.team.team_list["Distance"].astype(float)
-        self.config.team.teamnos_to_names = {row["Team Number"]: row["Team Name"] for _, row in self.config.team.team_list.iterrows()}
-
-    def set_room_names(self, tournament_details):
-        project_rooms = tournament_details["project_rooms"]
-        design_rooms = tournament_details["design_rooms"]
-
-        # replace all occurrences of P1, P2, ... and D1, D2, ... in self.events
-        for i, room_name in enumerate(project_rooms):
-            self.events.loc[self.events["Room"] == f"P{i+1}", "Room"] = room_name
-
-        for i, room_name in enumerate(design_rooms):
-            self.events.loc[self.events["Room"] == f"D{i+1}", "Room"] = room_name
-
-
+    # must be called after judging and match times are calculated
+    # because "rooms" are not intelligently calculated. 
     def create_lunch_events(self):
         all_rooms = self.events["Room"].unique().tolist()
         lunch_events = []
@@ -104,7 +162,13 @@ class Tournament:
             })
         self.events = pd.concat([self.events, pd.DataFrame(lunch_events)], ignore_index=True)
 
-    # Returns the judging slots. 
+    #################################################
+    #### TEMPLATE CREATION SUBFUNCTIONS ####
+    #################################################
+    
+    ## CREATE TIME SLOTS ##
+
+    # Add all judging slots to self.events 
     def get_judging_times(self):
         judging_start_time = TimeUtils.add_times( 
             self.config.day.opening_ceremony_end_time,
@@ -171,72 +235,9 @@ class Tournament:
 
         self.events = pd.concat([self.events, pd.DataFrame(judging_events)], ignore_index=True)
 
-    # Create judging assignments - no verification
-    # randomized judging assignments. 
-    def assign_judging(self, eventtype):
-        self.clear_judging_events(eventtype)
-
-        events = self.events[self.events["EventName"] == eventtype]
-        events_sorted = events.sort_values(by=["Room", "Time"], ascending=True)
-        teamnos = self.teamid_keys.copy()
-        np.random.shuffle(teamnos).astype(int)
-        events_sorted.loc[:, "Team"] = teamnos
-        # Update self.events
-        self.events.update(events_sorted)
-
-    def assign_all_judging(self, project_max_attempts=1e5, design_max_attempts=1e5):
-        if self.strategy_randomize == "judging":
-            for i in range(int(project_max_attempts)):
-                if i % 1000 == 0:
-                    print(f"STARTING (project) JUDGING ASSIGNMENT ATTEMPT {i}...")
-
-                self.assign_judging("Project")
-                good_proj = self.verify_schedule()
-                if good_proj:
-                    for j in range(int(design_max_attempts)):
-                        if j % 1000 == 0:
-                            print(f"  Trying design judging assignment attempt {j}...")
-                        self.assign_judging("Design")
-                        good_design = self.verify_schedule()
-                        if good_design:
-                            return True
-            return False
-        
-        # Assign judging methodically. 
-
-        self.clear_judging_events("Project")
-        self.clear_judging_events("Design")
-
-        project_design_events = self.events[self.events["EventName"].isin(["Project", "Design"])]
-        pd_events_sorted = project_design_events.sort_values(by=["EventName", "Room", "Time"], ascending=True)
-        # ^ this particular order ["Room", "Time"] puts back to back times for the same room
-        # looks like:
-        # 0   09:45:00    Design       0  DR1       10   -1
-        # 4   10:05:00    Design       0  DR1       10   -1
-        # 8   10:25:00    Design       0  DR1       10   -1
-        # 12  10:55:00    Design       0  DR1       10   -1
-        # ...
-
-        teamnos = self.teamid_keys.copy()
-
-        # Assign the teams to the first judging (design?) event as is (sorted by room/time)
-        teamlist = teamnos.copy()
-        # Do some math for the second event (project?) - depends on how "EventName" is sorted
-        # first rooms were [1 11] [2 12] [3 13]... [10 20] if 20 teams. 
-        # second rooms should be [5 15] [6 16] [7 17]... [4 14] if 20 teams.
-        rooms = np.array(teamnos)
-        rooms = rooms.reshape((self.config.tournament.njudging_rooms, -1))
-        rooms = np.hstack((rooms[:, len(rooms[1])//2:], rooms[:, :len(rooms[1])//2])).reshape(-1)
-        # ^ yes, there is basically magic happening here. Sorry, future me. 
-
-        teamlist = teamlist + list(rooms)
-        assert len(teamlist) == len(pd_events_sorted), "Team assignment length mismatch!"
-        pd_events_sorted["Team"] = teamlist
-
-        # Update self.events
-        self.events.update(pd_events_sorted)
-
-    # Create match times. 
+        # Create match times. 
+    
+    # Add all match slots to self.events
     def get_match_times(self):
         nrounds = self.config.tournament.ntable_rounds
         nmatches_per_round = np.ceil(self.nteams / self.config.tournament.ntables).astype(int)
@@ -287,6 +288,76 @@ class Tournament:
 
         self.events = pd.concat([self.events, pd.DataFrame(match_events)], ignore_index=True)
 
+    ## ASSIGN TEMPLATE TEAMS TO EVENTS ## 
+
+    # Create judging assignments - no verification
+    # randomized judging assignments. 
+    def assign_judging_randomly(self, eventtype):
+        self.clear_judging_events(eventtype)
+
+        events = self.events[self.events["EventName"] == eventtype]
+        events_sorted = events.sort_values(by=["Room", "Time"], ascending=True)
+        teamnos = self.teamid_keys.copy()
+        np.random.shuffle(teamnos).astype(int)
+        events_sorted.loc[:, "Team"] = teamnos
+        # Update self.events
+        self.events.update(events_sorted)
+
+    # Assign judging assignments - methodical
+    def assign_judging_methodically(self):
+        self.clear_judging_events("Project")
+        self.clear_judging_events("Design")
+
+        project_design_events = self.events[self.events["EventName"].isin(["Project", "Design"])]
+        pd_events_sorted = project_design_events.sort_values(by=["EventName", "Room", "Time"], ascending=True)
+        # ^ this particular order ["Room", "Time"] puts back to back times for the same room
+        # looks like:
+        # 0   09:45:00    Design       0  DR1       10   -1
+        # 4   10:05:00    Design       0  DR1       10   -1
+        # 8   10:25:00    Design       0  DR1       10   -1
+        # 12  10:55:00    Design       0  DR1       10   -1
+        # ...
+
+        teamnos = self.teamid_keys.copy()
+
+        # Assign the teams to the first judging (design?) event as is (sorted by room/time)
+        teamlist = teamnos.copy()
+        # Do some math for the second event (project?) - depends on how "EventName" is sorted
+        # first rooms were [1 11] [2 12] [3 13]... [10 20] if 20 teams. 
+        # second rooms should be [5 15] [6 16] [7 17]... [4 14] if 20 teams.
+        rooms = np.array(teamnos)
+        rooms = rooms.reshape((self.config.tournament.njudging_rooms, -1))
+        rooms = np.hstack((rooms[:, len(rooms[1])//2:], rooms[:, :len(rooms[1])//2])).reshape(-1)
+        # ^ yes, there is basically magic happening here. Sorry, future me. 
+
+        teamlist = teamlist + list(rooms)
+        assert len(teamlist) == len(pd_events_sorted), "Team assignment length mismatch!"
+        pd_events_sorted["Team"] = teamlist
+
+        # Update self.events
+        self.events.update(pd_events_sorted)
+
+    # Assign all judging events according to self.strategy_randomize
+    def assign_all_judging(self, project_max_attempts=1e5, design_max_attempts=1e5):
+        if self.strategy_randomize == "judging":
+            for i in range(int(project_max_attempts)):
+                if i % 1000 == 0:
+                    print(f"STARTING (project) JUDGING ASSIGNMENT ATTEMPT {i}...")
+
+                self.assign_judging_randomly("Project")
+                good_proj = self.verify_schedule()
+                if good_proj:
+                    for j in range(int(design_max_attempts)):
+                        if j % 1000 == 0:
+                            print(f"  Trying design judging assignment attempt {j}...")
+                        self.assign_judging_randomly("Design")
+                        good_design = self.verify_schedule()
+                        if good_design:
+                            return True
+            return False
+        self.assign_judging_methodically()
+
+    # Assign teams to matches - both random and methodical methods in this fn
     def assign_match_round(self, roundno):
         self.clear_table_events(roundno)
 
@@ -323,6 +394,7 @@ class Tournament:
         # Update self.events
         self.events.update(table_events_sorted)
 
+    # Assign all match events according to self.strategy_randomize
     def assign_all_matches(self, max_startovers=1000, max_r1 = 1e5, max_r2 = 4e5, max_r3=16e5):
 
         if self.strategy_randomize == "judging":
@@ -375,38 +447,6 @@ class Tournament:
                 print("FOUND ROUND 3 ASSIGNMENT AFTER ", i, "ATTEMPTS")
                 return True
         return False
-
-    # Assign teams from teamlist.csv to the actual judging times. 
-    def assign_teams_to_judging(self):
-        all_earliest_times = [] # (earliest_time, teamno)
-        
-        for teamno in self.teamid_keys:
-            team_events = self.get_events_by_team().get_group(teamno)
-            judging_events = team_events[team_events["RoundNo"] == 0]
-            judging_events = judging_events[judging_events["Team"] >= 0]  # remove breaks/no team
-            judging_times = judging_events["Time"].values
-            earliest_judging_time = min(judging_times)
-            all_earliest_times.append((earliest_judging_time, teamno))
-        
-        all_earliest_times.sort(key=lambda x: x[0]) # sort by earliest judging time
-        # get all teams by distance
-        all_teams_to_dists = [(y, x) for x, y in zip(self.config.team.team_list["Team Number"], self.config.team.team_list["Distance"])]
-        all_teams_to_dists.sort(key=lambda x: x[0]) # sort by distance
-
-        self.events["Team ID"] = self.events["Team"] 
-
-        for x, y in zip(all_earliest_times, all_teams_to_dists):
-            earliest_time, teamid = x
-            dist, teamno = y
-
-            self.events.loc[self.events["Team ID"] == teamid, "Team"] = teamno
-            self.events.loc[self.events["Team ID"] == teamid, "TeamName"] = self.config.team.teamnos_to_names[teamno]
-            
-        break_events = self.events[self.events["Team"] == -2]
-        break_events.loc[:, "TeamName"] = break_events.loc[:, "EventName"]
-        self.events.update(break_events)
-
-        return True
 
     #################################################
     ################### UTILITIES ###################
@@ -564,7 +604,11 @@ class Tournament:
                 self.events.update(round_match)
             else:
                 return 
-            
+
+    #####################################################
+    ################### CSV UTILITIES ###################
+    #####################################################
+       
     # save the df to a csv
     def save_schedule_csv(self, filename):
         self.events.to_csv(filename, index=False)
