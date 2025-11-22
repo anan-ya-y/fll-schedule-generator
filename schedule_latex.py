@@ -234,7 +234,7 @@ def create_ref_schedule(Tournament):
     times = all_events_at_tables["Time"].unique().tolist()
     times.sort()
 
-    with doc.create(LongTable("|c|c|l|l|p{3in}|r|r|")) as t:
+    with doc.create(LongTable("|c|c|l|l|p{2.5in}|r|r|")) as t:
         t.add_hline()
         t.add_row((
             bold("Time"),
@@ -260,7 +260,7 @@ def create_ref_schedule(Tournament):
                 teamA.RoundNo,
                 teamA.Room,
                 teamA_display,
-                "",
+                "   ",
                 teamB_display,
                 teamB.Room]
             ))
