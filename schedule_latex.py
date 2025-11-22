@@ -121,6 +121,8 @@ def create_judging_schedule(Tournament):
                     display_item = roomevents[r]["TeamName"]
                     if roomevents[r]["Team"] > 0:
                         display_item = f'{roomevents[r]["Team"]}: {display_item}'
+                    else:
+                        display_item = display_item.upper()
                 else:
                     display_item = ""
                 roomevent_display_items.append(display_item)
@@ -146,9 +148,11 @@ def create_ref_schedule(Tournament):
     doc.append(NoEscape(r'\rowcolors{2}{gray!0}{gray!10}'))
 
     events = Tournament.events
-    match_events = events[events["RoundNo"] != 0].sort_values(by=["Time", "Room"])
-    match_events = match_events.groupby(by=["Time"])
-    times = match_events.groups.keys()
+    table_events = events[events["EventName"] == "Table"]
+    all_tables = sorted(table_events["Room"].unique().tolist())
+    all_events_at_tables = events[events["Room"].isin(all_tables)]
+    times = all_events_at_tables["Time"].unique().tolist()
+    times.sort()
 
     with doc.create(LongTable("|c|c|l|l|p{3in}|r|r|")) as t:
         t.add_hline()
@@ -164,17 +168,20 @@ def create_ref_schedule(Tournament):
         t.add_hline()
 
         for time in times:
-            timeevents = match_events.get_group(time)
+            timeevents = all_events_at_tables.groupby(by="Time").get_group(time)
             teamA = timeevents.iloc[0]
             teamB = timeevents.iloc[1]
+
+            teamA_display = f'{teamA.Team}: {teamA.TeamName}' if teamA.Team > 0 else teamA.TeamName.upper()
+            teamB_display = f'{teamB.Team}: {teamB.TeamName}' if teamB.Team > 0 else teamB.TeamName.upper()
 
             t.add_row(tuple(
                [ time.strftime("%I:%M %p"),
                 teamA.RoundNo,
                 teamA.Room,
-                f'{teamA.Team}: {teamA.TeamName}',
+                teamA_display,
                 "",
-                f'{teamB.Team}: {teamB.TeamName}',
+                teamB_display,
                 teamB.Room]
             ))
 
