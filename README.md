@@ -1,7 +1,7 @@
 # fll-schedule-generator
 
 ## 1. GENERATE YOUR TEMPLATE. 
-Either find an `old tournament_schedule.csv` file, or create one. To create one, fill out config.py with your desired configurations, and run the code. Hopefully you find a tournament. 
+Either find an old `tournament_schedule_template.csv` file, or create one. To create one, fill out config.py with your desired configurations, and run the code. Hopefully you find a tournament. 
 
 ## 2. APPLY TO YOUR TOURNAMENT. 
 Create tournament_details.json with the following information:
