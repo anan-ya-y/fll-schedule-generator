@@ -13,6 +13,10 @@ from pylatex import (
 def bold(x):
     return NoEscape(r'\textbf{' + str(x) + '}')
 
+#  Create FLLTournament Schedule CSV
+# Input: Tournament object
+#        date_str - date of the tournament in MM/DD/YY format
+# Output: fllt_schedule.csv file saved at fllt_schedule.csv
 def create_fllt(Tournament, date_str="1/1/25"):
     def get_event_description(row):
         if row["EventName"] == "Table":
@@ -51,8 +55,9 @@ def create_fllt(Tournament, date_str="1/1/25"):
     fllt_events = events[fllt_columns]
     fllt_events = fllt_events.sort_values(by=["Begin Time", "Room"])
     fllt_events.to_csv("fllt_schedule.csv", index=False)
+    print("Finished. Saved to file: fllt_schedule.csv")
 
-
+# Utility function to create pyLaTeX Document with common settings
 def create_doc(landscape=False):
     doc = Document()
     doc.packages.append(Package('geometry', options=['a4paper', 'margin=1cm', 'landscape' if landscape else "portrait"]))
@@ -61,6 +66,10 @@ def create_doc(landscape=False):
 
     return doc
 
+# Create team schedule PDF
+# Rows are each team & their events
+# Input: Tournament object
+# Output: team_schedule.pdf file saved as team_schedule.pdf
 def create_team_schedule(Tournament):
     doc = create_doc(landscape=True)
 
@@ -141,7 +150,12 @@ def create_team_schedule(Tournament):
     doc.append(NoEscape(r'\vspace{0.2in}'))
 
     doc.generate_pdf('team_schedule', clean_tex=False)
+    print("Finished. Saved to file: team_schedule.pdf")
 
+# Create judging schedule PDF
+# Rows are time slots, columns are judging rooms
+# Input: Tournament object
+# Output: judging_schedule.pdf file saved as judging_schedule.pdf
 def create_judging_schedule(Tournament):
     doc = create_doc(landscape=True)
 
@@ -198,7 +212,13 @@ def create_judging_schedule(Tournament):
                 
 
     doc.generate_pdf('judging_schedule', clean_tex=False)
+    print("Finished. Saved to file: judging_schedule.pdf")
 
+
+# Create referee schedule PDF
+# Rows are each time slot with two teams at tables
+# Input: Tournament object
+# Output: ref_schedule.pdf file saved as ref_schedule.pdf
 def create_ref_schedule(Tournament):
     doc = create_doc(landscape=True)
 
@@ -248,3 +268,4 @@ def create_ref_schedule(Tournament):
             t.add_hline()
 
     doc.generate_pdf('ref_schedule', clean_tex=False)
+    print("Finished. Saved to file: ref_schedule.pdf")
