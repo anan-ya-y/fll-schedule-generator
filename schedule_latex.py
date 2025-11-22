@@ -54,8 +54,8 @@ def create_fllt(Tournament, date_str="1/1/25"):
     ]
     fllt_events = events[fllt_columns]
     fllt_events = fllt_events.sort_values(by=["Begin Time", "Room"])
-    fllt_events.to_csv("fllt_schedule.csv", index=False)
-    print("Finished. Saved to file: fllt_schedule.csv")
+    fllt_events.to_csv("output/fllt_schedule.csv", index=False)
+    print("Finished. Saved to file: output/fllt_schedule.csv")
 
 # Utility function to create pyLaTeX Document with common settings
 def create_doc(landscape=False):
@@ -149,7 +149,7 @@ def create_team_schedule(Tournament):
     doc.append("\nClosing Ceremony: " + closing_ceremony_start + "\n\n")
     doc.append(NoEscape(r'\vspace{0.2in}'))
 
-    doc.generate_pdf('team_schedule', clean_tex=False)
+    doc.generate_pdf('output/team_schedule', clean_tex=False)
     print("Finished. Saved to file: team_schedule.pdf")
 
 # Create judging schedule PDF
@@ -211,7 +211,7 @@ def create_judging_schedule(Tournament):
             t.add_hline()
                 
 
-    doc.generate_pdf('judging_schedule', clean_tex=False)
+    doc.generate_pdf('output/judging_schedule', clean_tex=False)
     print("Finished. Saved to file: judging_schedule.pdf")
 
 
@@ -267,5 +267,5 @@ def create_ref_schedule(Tournament):
 
             t.add_hline()
 
-    doc.generate_pdf('ref_schedule', clean_tex=False)
+    doc.generate_pdf('output/ref_schedule', clean_tex=False)
     print("Finished. Saved to file: ref_schedule.pdf")
