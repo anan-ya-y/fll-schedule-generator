@@ -298,7 +298,7 @@ class Tournament:
         events = self.events[self.events["EventName"] == eventtype]
         events_sorted = events.sort_values(by=["Room", "Time"], ascending=True)
         teamnos = self.teamid_keys.copy()
-        np.random.shuffle(teamnos).astype(int)
+        np.random.shuffle(teamnos)
         events_sorted.loc[:, "Team"] = teamnos
         # Update self.events
         self.events.update(events_sorted)
@@ -338,7 +338,7 @@ class Tournament:
         self.events.update(pd_events_sorted)
 
     # Assign all judging events according to self.strategy_randomize
-    def assign_all_judging(self, project_max_attempts=1e5, design_max_attempts=1e5):
+    def assign_all_judging(self, project_max_attempts=1e6, design_max_attempts=1e6):
         if self.strategy_randomize == "judging":
             for i in range(int(project_max_attempts)):
                 if i % 1000 == 0:
@@ -395,7 +395,7 @@ class Tournament:
         self.events.update(table_events_sorted)
 
     # Assign all match events according to self.strategy_randomize
-    def assign_all_matches(self, max_startovers=1000, max_r1 = 1e5, max_r2 = 4e5, max_r3=16e5):
+    def assign_all_matches(self, max_startovers=1000, max_r1 = 16e5, max_r2 = 4e5, max_r3=1e5):
 
         if self.strategy_randomize == "judging":
             self.assign_match_round(1)
@@ -410,7 +410,7 @@ class Tournament:
             # Try round 1
             for i in range(int(max_r1)):
                 self.assign_match_round(1)
-                if self.verbose and i%1000 == 0:
+                if self.verbose and i%1e5 == 0:
                     print(f"  Trying round 1 assignment attempt {i}...")
                 if self.verify_schedule(check_opponents=False, check_table_diversity=False):
                     break
@@ -424,7 +424,7 @@ class Tournament:
             # Try round 2
             for i in range(int(max_r2)):
                 self.assign_match_round(2)
-                if self.verbose and i%1000 == 0:
+                if self.verbose and i%1e5 == 0:
                     print(f"  Trying round 2 assignment attempt {i}...")
                 if self.verify_schedule(check_opponents=True, check_table_diversity=False):
                     break
@@ -438,7 +438,7 @@ class Tournament:
             # Try round 3
             for i in range(int(max_r3)):
                 self.assign_match_round(3)
-                if self.verbose and i%1000 == 0:
+                if self.verbose and i%1e5 == 0:
                     print(f"  Trying round 3 assignment attempt {i}...")
                 if self.verify_schedule(check_opponents=True, check_table_diversity=True):
                     break
@@ -539,19 +539,29 @@ class Tournament:
     
     def verify_event_gap(self):
         min_gap = 100000
+        total_worst_gap = 0
+
         for teamno in self.teamid_keys:
             time_blocks = self.get_team_events_interval_list(teamno)
             # Sort by start time
             time_blocks.sort(key=lambda x: x[0])
+            worst_gap = 999
             for i in range(1, len(time_blocks)):
                 prev_end = TimeUtils.add_times(time_blocks[i - 1][0], time_blocks[i - 1][1])
                 curr_start = time_blocks[i][0]
                 gap = TimeUtils.subtract_times(curr_start, prev_end)
                 min_gap = min(min_gap, gap)
+                worst_gap = min(worst_gap, gap)
                 if gap < self.config.team.time_between_events:
                     if self.veryverbose:
                         print(f"Team {teamno} has insufficient gap between events.")
+                        print(f"Team event times: {time_blocks}")
+                        print(f"Gap: {gap} minutes.")
                     return False, teamno
+            total_worst_gap += worst_gap
+            print(f"Team {teamno} lowest event gap: {worst_gap} minutes.")
+        if self.veryverbose:
+            print(f"Average lowest event gap across all teams: {total_worst_gap / self.nteams} minutes.")
                 
         return True, min_gap
     
