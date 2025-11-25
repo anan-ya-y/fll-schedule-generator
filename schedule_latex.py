@@ -248,7 +248,7 @@ def create_ref_schedule(Tournament):
         t.add_hline()
 
         for time in times:
-            timeevents = all_events_at_tables.groupby(by="Time").get_group(time)
+            timeevents = all_events_at_tables.sort_values("Room").groupby(by="Time").get_group(time)
             teamA = timeevents.iloc[0]
             teamB = timeevents.iloc[1]
 
