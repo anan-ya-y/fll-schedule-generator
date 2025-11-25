@@ -46,17 +46,17 @@ class Config:
         # DAY CONFIGURATION
         self.day = SubConfig()
         self.day.lunch_start = "12:00"
-        self.day.nminutes_lunch = 30
+        self.day.nminutes_lunch = 60
         self.day.start_time = "9:00"
         self.day.opening_ceremony_duration = 20
         self.day.matches_start_time = "9:30"
         self.day.judging_prep = 10 # # of minutes between end of opening ceremony & first judging
-        self.day.closing_ceremony_time = "17:00"
+        self.day.closing_ceremony_time = "16:25"
         self.day.closing_ceremony_duration = 45
 
         # TEAM STUFF - this does NOT get saved to .JSON!!
         self.team = SubConfig()
-        self.team.time_between_events = 10 # minutes; minimum time between end of 1 event and start of next. 
+        self.team.time_between_events = 20 # minutes; minimum time between end of 1 event and start of next. 
 
         # do not touch. 
         self.process()
