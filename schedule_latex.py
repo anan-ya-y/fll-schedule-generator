@@ -1,4 +1,4 @@
-from schedule import Tournament
+from schedule import Tournament, DUMMY_TEAM_NO
 from utils import Event
 from utils import TimeUtils
 import pandas as pd
@@ -27,6 +27,9 @@ def create_fllt(Tournament, date_str="1/1/25"):
     events = Tournament.events.copy()
     events = events[events["EventName"].isin(["Table", "Project", "Design"])]
 
+    # Remove dummy teams
+    events = events[events["Team"] != DUMMY_TEAM_NO]
+
     # Replace all "Design" with "Robot"
     events.loc[events["EventName"] == "Design", "EventName"] = "Robot"
 
@@ -35,7 +38,7 @@ def create_fllt(Tournament, date_str="1/1/25"):
     events["Begin Time"] = events["Time"].apply(lambda x: x.strftime("%H:%M"))
     events["End Time"] = events.apply(lambda x: (TimeUtils.add_times(x["Time"], x["Duration"])).strftime("%H:%M"), axis=1)
     events["Type"] = events["EventName"]
-    events["Round"] = events["RoundNo"].apply(lambda x: min(1, x))
+    events["Round"] = events["RoundNo"].apply(lambda x: max(1, x))
     events["Description"] = events.apply(get_event_description, axis=1)    
     events["Room"] = events["Room"]
     events["Team #"] = events["Team"]
@@ -112,7 +115,7 @@ def create_team_schedule(Tournament):
 
         teamnos = Tournament.events["Team"].unique().tolist()
         teamnos.sort(key=lambda x: int(x))
-        teamnos = [tn for tn in teamnos if tn > 0]  # remove dummy teams
+        teamnos = [tn for tn in teamnos if tn > 0 and tn != DUMMY_TEAM_NO]  # remove dummy teams
         for teamno in teamnos:
             teamevents = Tournament.get_events_by_team().get_group(teamno)
             strevents = {

@@ -4,6 +4,8 @@ import numpy as np
 import json
 import pandas as pd
 
+DUMMY_TEAM_NO = 99999
+
 class Tournament:
     # IF generating from scratch, provide:
     # config: Config object
@@ -104,7 +106,21 @@ class Tournament:
         self.config.team.team_list = pd.read_csv(filename)
         self.config.team.team_list.loc[:, "Team Name"] = self.config.team.team_list["Team Name"].str.strip()
         self.config.team.team_list.loc[:, "Distance"] = self.config.team.team_list["Distance"].astype(float)
+
+        # make sure there's the right number of teams
+        if len(self.config.team.team_list) == self.nteams:
+            pass
+        elif len(self.config.team.team_list) == self.nteams - 1:
+            # add dummy team
+            self.config.team.team_list = pd.concat([
+                self.config.team.team_list,
+                pd.DataFrame([{"Team #": DUMMY_TEAM_NO, "Team Name": "FILLER TEAM", "Distance": 0}])
+            ], ignore_index=True)
+        else:
+            raise ValueError(f"Template has {self.nteams} teams; teamlist can only have either {self.nteams} or {self.nteams - 1} teams.")
+        
         self.config.team.teamnos_to_names = {row["Team #"]: row["Team Name"] for _, row in self.config.team.team_list.iterrows()}
+
 
     def set_room_names(self, tournament_details):
         project_rooms = tournament_details["project_rooms"]
