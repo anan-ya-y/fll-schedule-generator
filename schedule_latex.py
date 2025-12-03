@@ -66,6 +66,8 @@ def create_doc(landscape=False):
     doc.packages.append(Package('geometry', options=['a4paper', 'margin=1cm', 'landscape' if landscape else "portrait"]))
 
     doc.packages.append(Package('xcolor', options='table'))
+    doc.append(NoEscape(r'\sffamily'))
+    doc.append(NoEscape(r'\def\arraystretch{1.5}'))
 
     return doc
 
@@ -217,6 +219,53 @@ def create_judging_schedule(Tournament):
     doc.generate_pdf('output/judging_schedule', clean_tex=False)
     print("Finished. Saved to file: judging_schedule.pdf")
 
+def create_room_schedule(Tournament):
+    doc = create_doc(landscape=False)
+
+    doc.append(NoEscape(r'\Huge'))
+    doc.append(NoEscape(r'\rowcolors{2}{gray!0}{gray!10}'))
+
+    events = Tournament.events
+    project_events = events[events["EventName"] == "Project"]
+    design_events = events[events["EventName"] == "Design"]
+    judging_events = pd.concat([project_events, design_events])
+    all_judging_rooms = judging_events["Room"].unique().tolist()
+
+    for room in all_judging_rooms:
+        room_events = events[events["Room"] == room]
+        times = room_events["Time"].unique().tolist()
+        times.sort()
+
+        # print the room name on top
+        doc.append(bold(f'{room}'))
+        doc.append(NoEscape(r'\newline'))
+        doc.append(NoEscape(r'\vspace{0.1in}'))
+
+        with doc.create(Tabular("|c|c|c|")) as t:
+            t.add_hline()
+            t.add_row((
+                bold("Time"),
+                bold("Team \#"),
+                bold("Team Name")
+            ))
+            t.add_hline()
+
+            for time in times:
+                timeevents = room_events.groupby(by="Time").get_group(time)
+                for te in timeevents.itertuples():
+                    t.add_row((
+                        time.strftime("%I:%M %p"),
+                        te.Team if te.Team > 0 else "",
+                        te.TeamName if te.Team > 0 else te.TeamName.upper()
+                    ))
+                    t.add_hline()
+
+        # add a page break if not first page
+        if room != all_judging_rooms[-1]:
+            doc.append(NoEscape(r'\newpage'))
+
+    doc.generate_pdf('output/room_schedule', clean_tex=False)
+    print("Finished. Saved to file: room_schedule.pdf")
 
 # Create referee schedule PDF
 # Rows are each time slot with two teams at tables
