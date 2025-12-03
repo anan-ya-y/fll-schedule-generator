@@ -7,4 +7,5 @@ t = Tournament(csvfile="output_20mins/lunch_adjusted_template.csv", veryverbose=
 sln.create_team_schedule(t)
 sln.create_judging_schedule(t)
 sln.create_ref_schedule(t)
+sln.create_room_schedule(t)
 sln.create_fllt(t, "12/7/25")
