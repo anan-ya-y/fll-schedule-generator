@@ -51,7 +51,7 @@ class Config:
         self.day.opening_ceremony_duration = 20
         self.day.matches_start_time = "9:30"
         self.day.judging_prep = 10 # # of minutes between end of opening ceremony & first judging
-        self.day.closing_ceremony_time = "16:25"
+        self.day.closing_ceremony_time = "15:30"
         self.day.closing_ceremony_duration = 45
 
         # TEAM STUFF - this does NOT get saved to .JSON!!
