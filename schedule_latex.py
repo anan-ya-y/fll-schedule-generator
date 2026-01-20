@@ -17,7 +17,7 @@ def bold(x):
 # Input: Tournament object
 #        date_str - date of the tournament in MM/DD/YY format
 # Output: fllt_schedule.csv file saved at fllt_schedule.csv
-def create_fllt(Tournament, date_str="1/1/25"):
+def create_fllt(Tournament, date_str="1/1/25", output_folder):
     def get_event_description(row):
         if row["EventName"] == "Table":
             return f"Table Round {row['RoundNo']}"
@@ -57,8 +57,8 @@ def create_fllt(Tournament, date_str="1/1/25"):
     ]
     fllt_events = events[fllt_columns]
     fllt_events = fllt_events.sort_values(by=["Begin Time", "Room"])
-    fllt_events.to_csv("output/fllt_schedule.csv", index=False)
-    print("Finished. Saved to file: output/fllt_schedule.csv")
+    fllt_events.to_csv(f"{output_folder}/fllt_schedule.csv", index=False)
+    print(f"Finished. Saved to file: {output_folder}/fllt_schedule.csv")
 
 # Utility function to create pyLaTeX Document with common settings
 def create_doc(landscape=False):
@@ -75,7 +75,7 @@ def create_doc(landscape=False):
 # Rows are each team & their events
 # Input: Tournament object
 # Output: team_schedule.pdf file saved as team_schedule.pdf
-def create_team_schedule(Tournament):
+def create_team_schedule(Tournament, output_folder):
     doc = create_doc(landscape=True)
 
     # doc.append(NoEscape(r'\large'))
@@ -154,14 +154,14 @@ def create_team_schedule(Tournament):
     doc.append("\nClosing Ceremony: " + closing_ceremony_start + "\n\n")
     doc.append(NoEscape(r'\vspace{0.2in}'))
 
-    doc.generate_pdf('output/team_schedule', clean_tex=False)
-    print("Finished. Saved to file: team_schedule.pdf")
+    doc.generate_pdf(f"{output_folder}/team_schedule", clean_tex=False)
+    print(f"Finished. Saved to file: {output_folder}/team_schedule.pdf")
 
 # Create judging schedule PDF
 # Rows are time slots, columns are judging rooms
 # Input: Tournament object
 # Output: judging_schedule.pdf file saved as judging_schedule.pdf
-def create_judging_schedule(Tournament):
+def create_judging_schedule(Tournament, output_folder):
     doc = create_doc(landscape=True)
 
     doc.append(NoEscape(r'\large'))
@@ -216,10 +216,10 @@ def create_judging_schedule(Tournament):
             t.add_hline()
                 
 
-    doc.generate_pdf('output/judging_schedule', clean_tex=False)
-    print("Finished. Saved to file: judging_schedule.pdf")
+    doc.generate_pdf(f"{output_folder}/judging_schedule", clean_tex=False)
+    print(f"Finished. Saved to file: {output_folder}/judging_schedule.pdf")
 
-def create_room_schedule(Tournament):
+def create_room_schedule(Tournament, output_folder):
     doc = create_doc(landscape=False)
 
     doc.append(NoEscape(r'\Huge'))
@@ -264,14 +264,14 @@ def create_room_schedule(Tournament):
         if room != all_judging_rooms[-1]:
             doc.append(NoEscape(r'\newpage'))
 
-    doc.generate_pdf('output/room_schedule', clean_tex=False)
-    print("Finished. Saved to file: room_schedule.pdf")
+    doc.generate_pdf(f"{output_folder}/room_schedule", clean_tex=False)
+    print(f"Finished. Saved to file: {output_folder}/room_schedule.pdf")
 
 # Create referee schedule PDF
 # Rows are each time slot with two teams at tables
 # Input: Tournament object
 # Output: ref_schedule.pdf file saved as ref_schedule.pdf
-def create_ref_schedule(Tournament):
+def create_ref_schedule(Tournament, output_folder):
     doc = create_doc(landscape=True)
 
     doc.append(NoEscape(r'\large'))
@@ -319,5 +319,5 @@ def create_ref_schedule(Tournament):
 
             t.add_hline()
 
-    doc.generate_pdf('output/ref_schedule', clean_tex=False)
-    print("Finished. Saved to file: ref_schedule.pdf")
+    doc.generate_pdf(f"{output_folder}/ref_schedule", clean_tex=False)
+    print(f"Finished. Saved to file: {output_folder}/ref_schedule.pdf")
