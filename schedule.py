@@ -1,7 +1,7 @@
 from utils import TimeUtils, Event
 from config import Config, SubConfig
 import numpy as np
-import json
+import json, os
 import pandas as pd
 
 DUMMY_TEAM_NO = 99999
@@ -18,7 +18,7 @@ class Tournament:
     # tournament_details_json: path to JSON file with teamlist and room names (see readme.md for format)
     # verbose: whether to print progress
     # veryverbose: whether to print detailed progress    
-    def __init__(self, config=None, strategy_randomize="matches", 
+    def __init__(self, output_folder, config=None, strategy_randomize="matches", 
                  csvfile=None, tournament_details_json="tournament_details.json", 
                  verbose=True, veryverbose=False):
         self.verbose = verbose
@@ -51,7 +51,7 @@ class Tournament:
             self.create_template()
 
             # Save the events schedule to a CSV. - filename is tournament_schedule{time}.csv
-            self.save_schedule_csv(f"output/tournament_schedule_template_{TimeUtils.get_current_time_str()}.csv")
+            self.save_schedule_csv(f"{output_folder}/tournament_schedule_template_{TimeUtils.get_current_time_str()}.csv")
 
         self.valid_template = self.verify_schedule(check_opponents=True, check_table_diversity=True)
         assert self.valid_template, "Template is not valid. Will not generate new documents. "

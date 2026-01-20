@@ -37,3 +37,8 @@ sln.create_judging_schedule(t)
 sln.create_ref_schedule(t)
 sln.create_fllt(t, "MM/D/YY")
 ```
+
+
+
+# Used for tournaments
+2025 Champaign qualifier: precalculated_templates/2025_champaign_qualifier. 
