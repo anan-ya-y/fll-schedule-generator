@@ -103,7 +103,7 @@ class Config:
         completed_json_dict = {}
 
         for d in self.__dict__:
-            if d != "team":  # do not save team stuff to JSON
+            if d == "team":  # do not save team stuff to JSON
                 continue
 
             
@@ -122,4 +122,18 @@ class Config:
         with open(filename, 'r') as f:
             data = json.load(f)
             for key, value in data.items():
-                setattr(self, key, value)
+                if type(value) == dict:
+                    sc = SubConfig()
+                    for k, v in value.items():
+                        setattr(sc, k, v)
+                    setattr(self, key, sc)
+                    print(value)
+                else:
+                    setattr(self, key, value)
+
+        # Times need to be converted back to time objects!! 
+        self.day.start_time = dt.strptime(self.day.start_time, "%H:%M:%S").time()
+        self.day.lunch_start = dt.strptime(self.day.lunch_start, "%H:%M:%S").time()
+        self.day.closing_ceremony_time = dt.strptime(self.day.closing_ceremony_time, "%H:%M:%S").time()
+        self.day.matches_start_time = dt.strptime(self.day.matches_start_time, "%H:%M:%S").time()
+        self.day.opening_ceremony_end_time = TimeUtils.add_times(self.day.start_time, self.day.opening_ceremony_duration)

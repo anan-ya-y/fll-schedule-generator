@@ -17,7 +17,7 @@ def bold(x):
 # Input: Tournament object
 #        date_str - date of the tournament in MM/DD/YY format
 # Output: fllt_schedule.csv file saved at fllt_schedule.csv
-def create_fllt(Tournament, date_str="1/1/25", output_folder):
+def create_fllt(Tournament, output_folder, date_str="1/1/25"):
     def get_event_description(row):
         if row["EventName"] == "Table":
             return f"Table Round {row['RoundNo']}"
@@ -154,7 +154,7 @@ def create_team_schedule(Tournament, output_folder):
     doc.append("\nClosing Ceremony: " + closing_ceremony_start + "\n\n")
     doc.append(NoEscape(r'\vspace{0.2in}'))
 
-    doc.generate_pdf(f"{output_folder}/team_schedule", clean_tex=False)
+    doc.generate_pdf(f"{output_folder}/team_schedule", clean_tex=False, silent=True)
     print(f"Finished. Saved to file: {output_folder}/team_schedule.pdf")
 
 # Create judging schedule PDF
@@ -216,7 +216,7 @@ def create_judging_schedule(Tournament, output_folder):
             t.add_hline()
                 
 
-    doc.generate_pdf(f"{output_folder}/judging_schedule", clean_tex=False)
+    doc.generate_pdf(f"{output_folder}/judging_schedule", clean_tex=False, silent=True)
     print(f"Finished. Saved to file: {output_folder}/judging_schedule.pdf")
 
 def create_room_schedule(Tournament, output_folder):
@@ -245,7 +245,7 @@ def create_room_schedule(Tournament, output_folder):
             t.add_hline()
             t.add_row((
                 bold("Time"),
-                bold("Team \#"),
+                bold("Team #"),
                 bold("Team Name")
             ))
             t.add_hline()
@@ -264,7 +264,7 @@ def create_room_schedule(Tournament, output_folder):
         if room != all_judging_rooms[-1]:
             doc.append(NoEscape(r'\newpage'))
 
-    doc.generate_pdf(f"{output_folder}/room_schedule", clean_tex=False)
+    doc.generate_pdf(f"{output_folder}/room_schedule", clean_tex=False, silent=True)
     print(f"Finished. Saved to file: {output_folder}/room_schedule.pdf")
 
 # Create referee schedule PDF
@@ -319,5 +319,5 @@ def create_ref_schedule(Tournament, output_folder):
 
             t.add_hline()
 
-    doc.generate_pdf(f"{output_folder}/ref_schedule", clean_tex=False)
+    doc.generate_pdf(f"{output_folder}/ref_schedule", clean_tex=False, silent=True)
     print(f"Finished. Saved to file: {output_folder}/ref_schedule.pdf")
