@@ -37,6 +37,15 @@ sln.create_judging_schedule(t)
 sln.create_ref_schedule(t)
 sln.create_fllt(t, "MM/D/YY")
 ```
+## 4. Sample command for CLI
+```
+python3 schedule_generator.py \
+    --config precalculated_templates/2025_champaign_qualifier/config.json  \
+    --tournament_details precalculated_templates/2025_champaign_qualifier/tournament_details.json \
+    --template_csv precalculated_templates/2025_champaign_qualifier/lunch_adjusted_template.csv\
+    --output_folder 2026_sectional \
+    --tournament_date 1/31/2026
+```
 
 
 
