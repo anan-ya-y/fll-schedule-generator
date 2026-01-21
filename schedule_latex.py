@@ -174,6 +174,7 @@ def create_judging_schedule(Tournament, output_folder):
     design_events = events[events["EventName"] == "Design"]
     judging_events = pd.concat([project_events, design_events])
     all_rooms = sorted(judging_events["Room"].unique().tolist())
+    project_rooms = sorted(project_events["Room"].unique().tolist())
 
     # Get all events in each of the judging rooms (including breaks. )
     all_judge_room_events = events[events["Room"].isin(all_rooms)]
@@ -185,7 +186,7 @@ def create_judging_schedule(Tournament, output_folder):
 
     with doc.create(Tabular(tabular)) as t:
         t.add_hline()
-        t.add_row(tuple([bold("Time")] + [bold(f"{r}") for r in all_rooms]))
+        t.add_row(tuple([bold("Time")] + [bold(f"{r} ({'P' if r in project_rooms else 'D'})") for r in all_rooms]))
         t.add_hline()
 
         for time in all_times:
@@ -230,6 +231,7 @@ def create_room_schedule(Tournament, output_folder):
     design_events = events[events["EventName"] == "Design"]
     judging_events = pd.concat([project_events, design_events])
     all_judging_rooms = judging_events["Room"].unique().tolist()
+    project_rooms = project_events["Room"].unique().tolist()
 
     for room in all_judging_rooms:
         room_events = events[events["Room"] == room]
@@ -237,7 +239,7 @@ def create_room_schedule(Tournament, output_folder):
         times.sort()
 
         # print the room name on top
-        doc.append(bold(f'{room}'))
+        doc.append(bold(f'{room} ({"Project" if room in project_rooms else "Design"})'))
         doc.append(NoEscape(r'\newline'))
         doc.append(NoEscape(r'\vspace{0.1in}'))
 
