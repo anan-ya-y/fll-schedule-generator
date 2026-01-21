@@ -87,6 +87,8 @@ class Tournament:
         all_teams_to_dists = [(y, x) for x, y in zip(self.config.team.team_list["Team #"], self.config.team.team_list["Distance"])]
         all_teams_to_dists.sort(key=lambda x: x[0]) # sort by distance
 
+        teamno_to_note = {row["Team #"]: row.get("Note", "") for _, row in self.config.team.team_list.iterrows()}
+
         self.events["Team ID"] = self.events["Team"] 
 
         for x, y in zip(all_earliest_times, all_teams_to_dists):
@@ -95,6 +97,7 @@ class Tournament:
 
             self.events.loc[self.events["Team ID"] == teamid, "Team"] = teamno
             self.events.loc[self.events["Team ID"] == teamid, "TeamName"] = self.config.team.teamnos_to_names[teamno]
+            self.events.loc[self.events["Team ID"] == teamid, "Note"] = teamno_to_note[teamno]
             
         break_events = self.events[self.events["Team"] == -2]
         break_events.loc[:, "TeamName"] = break_events.loc[:, "EventName"]

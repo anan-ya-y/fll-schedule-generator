@@ -323,3 +323,56 @@ def create_ref_schedule(Tournament, output_folder):
 
     doc.generate_pdf(f"{output_folder}/ref_schedule", clean_tex=False, silent=True)
     print(f"Finished. Saved to file: {output_folder}/ref_schedule.pdf")
+
+def create_emcee_schedule(Tournament, output_folder):
+    doc = create_doc(landscape=True)
+
+    doc.append(NoEscape(r'\large'))
+    doc.append(NoEscape(r'\sffamily'))
+    doc.append(NoEscape(r'\def\arraystretch{1.5}'))
+    doc.append(NoEscape(r'\rowcolors{2}{gray!0}{gray!10}'))
+
+    events = Tournament.events
+    table_events = events[events["EventName"] == "Table"]
+    all_tables = sorted(table_events["Room"].unique().tolist())
+    all_events_at_tables = events[events["Room"].isin(all_tables)]
+    times = all_events_at_tables["Time"].unique().tolist()
+    times.sort()
+
+    with doc.create(LongTable("|c|c|l|l|p{2.5in}|r|r|")) as t:
+        t.add_hline()
+        t.add_row((
+            bold("Time"),
+            bold("Rnd"),
+            bold("Table No."),
+            bold("Team 1"),
+            bold("Notes"),
+            bold("Team 2"),
+            bold("Table No.")
+        ))
+        t.add_hline()
+
+        for time in times:
+            timeevents = all_events_at_tables.sort_values("Room").groupby(by="Time").get_group(time)
+            teamA = timeevents.iloc[0]
+            teamB = timeevents.iloc[1]
+            teamA_note = teamA["Note"] 
+            teamB_note = teamB["Note"] 
+
+            teamA_display = f'{teamA.Team}: {teamA.TeamName}' if teamA.Team > 0 else teamA.TeamName.upper()
+            teamB_display = f'{teamB.Team}: {teamB.TeamName}' if teamB.Team > 0 else teamB.TeamName.upper()
+
+            t.add_row(tuple(
+               [ time.strftime("%I:%M %p"),
+                teamA.RoundNo,
+                teamA.Room,
+                teamA_display,
+                NoEscape(f'\\tiny {teamA_note}\hfill {teamB_note}'),
+                teamB_display,
+                teamB.Room]
+            ))
+
+            t.add_hline()
+
+    doc.generate_pdf(f"{output_folder}/emcee_schedule", clean_tex=False, silent=True)
+    print(f"Finished. Saved to file: {output_folder}/emcee_schedule.pdf")
