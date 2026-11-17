@@ -77,6 +77,30 @@ def main() -> None:
             raise SystemExit("An even team count or dummy team is required.")
         config.tournament.odd_team_policy = "dummy"
 
+    while True:
+        table_count = ask_int("Number of physical tables", config.tournament.ntables)
+        if table_count >= 2 and table_count % 2 == 0:
+            break
+        print("Please enter an even number of tables (2, 4, 6, ...).")
+    config.tournament.ntables = table_count
+    print("Tables are paired in the listed order: 1+2, 3+4, and so on.")
+    config.tournament.table_names = ask_rooms("Table", table_count)
+    execution_minutes = ask_int(
+        "Match execution duration in minutes",
+        config.table.nminutes_execution,
+    )
+    round_one_scoring = ask_int(
+        "Round 1 scoring duration in minutes",
+        config.table.nminutes_table_rnd1 - config.table.nminutes_execution,
+    )
+    later_scoring = ask_int(
+        "Later-round scoring duration in minutes",
+        config.table.nminutes_table_allrounds - config.table.nminutes_execution,
+    )
+    config.table.nminutes_execution = execution_minutes
+    config.table.nminutes_table_rnd1 = execution_minutes + round_one_scoring
+    config.table.nminutes_table_allrounds = execution_minutes + later_scoring
+
     room_count = ask_int("Rooms per judging type", config.tournament.njudging_rooms)
     project_rooms = ask_rooms("Project", room_count)
     design_rooms = ask_rooms("Design", room_count)

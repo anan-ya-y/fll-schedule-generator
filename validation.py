@@ -57,8 +57,8 @@ def validate_tournament(tournament: Tournament) -> ValidationReport:
         if rounds != [1, 2, 3]:
             raise ValueError(f"Template team {team_id} has incorrect table rounds: {rounds}")
         table_names = set(team_events.loc[team_events["EventName"] == "Table", "Room"])
-        if len(table_names) != 2:
-            raise ValueError(f"Template team {team_id} does not use both table positions")
+        if len(table_names) < 2:
+            raise ValueError(f"Template team {team_id} does not use at least two tables")
 
         records = list(team_events.itertuples(index=False))
         for previous, current in zip(records, records[1:]):
@@ -85,14 +85,32 @@ def validate_tournament(tournament: Tournament) -> ValidationReport:
     for row in table_events.itertuples(index=False):
         if int(row.Duration) != expected_table_durations[int(row.RoundNo)]:
             raise ValueError(f"Incorrect duration for Table Round {row.RoundNo}")
+    table_pairs = {
+        frozenset(config.tournament.table_names[index : index + 2])
+        for index in range(0, config.tournament.ntables, 2)
+    }
     opponents: set[tuple[int, int]] = set()
     for (round_no, start), match in table_events.groupby(["RoundNo", "Time"]):
-        if len(match) != 2 or set(match["Room"]) != set(config.tournament.table_names):
-            raise ValueError(f"Round {round_no} at {start} is not a complete two-table match")
+        rooms = set(match["Room"])
+        if (
+            len(match) != 2
+            or len(rooms) != 2
+            or frozenset(rooms) not in table_pairs
+        ):
+            raise ValueError(
+                f"Round {round_no} at {start} does not use one complete table pair"
+            )
         pair = tuple(sorted(int(value) for value in match["Team ID"]))
         if pair in opponents:
             raise ValueError(f"Repeated opponent pairing: {pair}")
         opponents.add(pair)
+
+    match_starts = sorted({_minutes(value) for value in table_events["Time"]})
+    for previous, current in zip(match_starts, match_starts[1:]):
+        if current < previous + config.table.nminutes_execution:
+            raise ValueError(
+                "Match execution intervals overlap for the head referee"
+            )
 
     for round_no in (1, 2):
         current = table_events[table_events["RoundNo"] == round_no]

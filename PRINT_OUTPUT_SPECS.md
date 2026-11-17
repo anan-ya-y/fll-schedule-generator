@@ -306,21 +306,22 @@ aligned and Team 2 is right aligned.
 - Identify table rooms from events whose `EventName` is `Table`.
 - Include all events occurring in those rooms, thereby including table breaks and
   lunch.
-- Create one row for each distinct start time, sorted chronologically.
-- Within each time, sort events by `Room` ascending. The first becomes Team 1 and
-  the second becomes Team 2.
+- Create one row for each active configured table pair at each distinct start
+  time, sorted chronologically and then by pair order.
+- Tables are paired in configuration order: the first two table names form one
+  pair, the next two form another pair, and so on. The first table in the pair
+  becomes Team 1 and the second becomes Team 2.
 - Positive team display is `<team number>: <team name>`.
 - Zero or negative team display is uppercase `TeamName`, normally `BREAK` or
   `LUNCH`.
 - The round value is taken from the first event; breaks and lunch display `0`.
 - Dummy team `99999` is not filtered and is shown as a normal team.
 
-### Current compatibility hazard
+### Table-pair validation
 
-The renderer is hard-coded to exactly two displayed table events at each time. It
-fails if fewer than two are present and silently ignores the third and later events
-when more than two tables exist. A replacement should either enforce a two-table
-input constraint or define a dynamic multi-table layout.
+The renderer supports any even number of configured tables. It requires both
+members of an active pair to have an event at the same time and rejects incomplete
+or cross-pair rows.
 
 Although a long-table mechanism is used, the current document does not explicitly
 repeat the header on later pages.
@@ -333,9 +334,9 @@ The referee schedule plus team-specific notes for the announcer/emcee.
 
 ### Shared behavior with referee schedule
 
-Page format, columns, event inclusion, time ordering, table ordering, team display,
-break/lunch display, round values, dummy-team handling, and the exactly-two-tables
-limitation are identical to `ref_schedule.pdf`.
+Page format, columns, event inclusion, time ordering, table-pair ordering, team
+display, break/lunch display, round values, dummy-team handling, and multi-table
+pairing are identical to `ref_schedule.pdf`.
 
 ### Notes column
 
@@ -375,7 +376,8 @@ For any non-dummy team:
 
 A replacement should be tested with at least:
 
-- two table rooms;
+- four table rooms arranged as two physical pairs (plus a two-table regression
+  case);
 - one Project room and one Design room;
 - two real teams plus one dummy-team case in a separate test;
 - three table rounds per real team;
@@ -396,8 +398,7 @@ Verify:
 5. Correct uppercase and blank-team-number treatment for breaks and lunch.
 6. Consistent team-event assignments across all six artifacts.
 7. Multi-page behavior with enough teams/time slots to overflow one page.
-8. Defined behavior for unsynchronized judging rooms and more or fewer than two
-   table events at a time.
+8. Correct pair rows when more than two table events share a break or lunch time.
 
 ## 12. Decisions needed for a new implementation
 
@@ -407,13 +408,10 @@ rules in the current code:
 1. Whether to keep the PDFs visually minimal or add tournament name, date, and page
    numbering.
 2. Whether team schedules must support a configurable number of match rounds.
-3. Whether referee/emcee schedules must support more than two tables.
-4. Whether judging-room matrices permit unsynchronized rooms with blank cells.
-5. Whether dummy team `99999` should be removed from every human-facing printout.
-6. Whether repeated headers are required on multi-page tables.
-7. How long names and notes should wrap, truncate, or reduce in size.
-8. Whether output ordering should use natural sorting (`Table 2` before `Table 10`)
-   instead of current lexicographic sorting.
+3. Whether judging-room matrices permit unsynchronized rooms with blank cells.
+4. Whether dummy team `99999` should be removed from every human-facing printout.
+5. Whether repeated headers are required on multi-page tables.
+6. How long names and notes should wrap, truncate, or reduce in size.
 
 Unless those policies are deliberately changed, use the compatibility behavior in
 the artifact sections above.

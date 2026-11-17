@@ -270,8 +270,33 @@ def create_room_schedule(tournament: Tournament, output_folder: str | Path) -> P
     return pdf_path
 
 
+def _paired_table_rows(tournament: Tournament):
+    """Yield table-room events as configured physical pairs at each time."""
+    table_names = tournament.config.tournament.table_names
+    table_events = tournament.events[
+        tournament.events["Room"].isin(table_names)
+    ]
+    for start in sorted(table_events["Time"].unique().tolist()):
+        time_events = table_events[table_events["Time"] == start]
+        for pair_index in range(0, len(table_names), 2):
+            pair_names = table_names[pair_index : pair_index + 2]
+            selected = time_events[time_events["Room"].isin(pair_names)]
+            if selected.empty:
+                continue
+            if len(selected) != 2 or set(selected["Room"]) != set(pair_names):
+                raise ValueError(
+                    f"Expected one event on each of {pair_names} at {start}, "
+                    f"found {len(selected)}"
+                )
+            yield (
+                start,
+                selected[selected["Room"] == pair_names[0]].iloc[0],
+                selected[selected["Room"] == pair_names[1]].iloc[0],
+            )
+
+
 def create_ref_schedule(tournament: Tournament, output_folder: str | Path) -> Path:
-    """Create the legacy two-table referee schedule PDF."""
+    """Create the referee schedule PDF, one row per physical table pair."""
     from pylatex import LongTable
     from pylatex.utils import NoEscape
 
@@ -280,13 +305,6 @@ def create_ref_schedule(tournament: Tournament, output_folder: str | Path) -> Pa
     document.append(NoEscape(r"\sffamily"))
     document.append(NoEscape(r"\def\arraystretch{1.5}"))
     document.append(NoEscape(r"\rowcolors{2}{gray!0}{gray!10}"))
-    events = tournament.events
-    table_rooms = sorted(
-        events.loc[events["EventName"] == "Table", "Room"].unique().tolist()
-    )
-    table_events = events[events["Room"].isin(table_rooms)]
-    times = sorted(table_events["Time"].unique().tolist())
-
     with document.create(LongTable("|c|c|l|l|p{2.5in}|r|r|")) as table:
         table.add_hline()
         table.add_row(
@@ -304,14 +322,7 @@ def create_ref_schedule(tournament: Tournament, output_folder: str | Path) -> Pa
             )
         )
         table.add_hline()
-        for start in times:
-            selected = table_events[table_events["Time"] == start].sort_values(
-                "Room",
-                kind="stable",
-            )
-            if len(selected) < 2:
-                raise ValueError(f"Expected two table events at {start}, found {len(selected)}")
-            first, second = selected.iloc[0], selected.iloc[1]
+        for start, first, second in _paired_table_rows(tournament):
             first_display = (
                 f"{first.Team}: {first.TeamName}"
                 if first.Team > 0
@@ -343,7 +354,7 @@ def create_ref_schedule(tournament: Tournament, output_folder: str | Path) -> Pa
 
 
 def create_emcee_schedule(tournament: Tournament, output_folder: str | Path) -> Path:
-    """Create the legacy two-table emcee PDF and retained TeX source."""
+    """Create the emcee PDF, one row per physical table pair."""
     from pylatex import LongTable
     from pylatex.utils import NoEscape
 
@@ -355,12 +366,6 @@ def create_emcee_schedule(tournament: Tournament, output_folder: str | Path) -> 
     document.append(NoEscape(r"\sffamily"))
     document.append(NoEscape(r"\def\arraystretch{1.5}"))
     document.append(NoEscape(r"\rowcolors{2}{gray!0}{gray!10}"))
-
-    events = tournament.events
-    table_events = events[events["EventName"] == "Table"]
-    all_tables = sorted(table_events["Room"].unique().tolist())
-    all_events_at_tables = events[events["Room"].isin(all_tables)]
-    times = sorted(all_events_at_tables["Time"].unique().tolist())
 
     with document.create(LongTable("|c|c|l|l|p{2.5in}|r|r|")) as table:
         table.add_hline()
@@ -379,14 +384,7 @@ def create_emcee_schedule(tournament: Tournament, output_folder: str | Path) -> 
             )
         )
         table.add_hline()
-        for start in times:
-            time_events = all_events_at_tables[
-                all_events_at_tables["Time"] == start
-            ].sort_values("Room", kind="stable")
-            if len(time_events) < 2:
-                raise ValueError(f"Expected two table events at {start}, found {len(time_events)}")
-            first = time_events.iloc[0]
-            second = time_events.iloc[1]
+        for start, first, second in _paired_table_rows(tournament):
             first_display = (
                 f"{first.Team}: {first.TeamName}"
                 if first.Team > 0

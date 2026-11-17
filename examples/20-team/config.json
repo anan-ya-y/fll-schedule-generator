@@ -21,6 +21,7 @@
   },
   "table": {
     "match_break_duration": 10,
+    "nminutes_execution": 5,
     "nminutes_table_rnd1": 10,
     "nminutes_table_allrounds": 8
   },
@@ -33,7 +34,7 @@
   "day": {
     "start_time": "09:00",
     "opening_ceremony_duration": 20,
-    "judging_start_time": "10:30",
+    "judging_start_time": "10:00",
     "matches_start_time": "10:00",
     "lunch_start": "12:00",
     "nminutes_lunch": 60,
