@@ -3,6 +3,15 @@
 *.csv
 *.pdf 
 *.tex
+/output/
+/e2e_output/
+/template_render_output/
+!examples/20-team/config.json
+!examples/20-team/tournament_details.json
+!examples/20-team/teamlist.csv
+!examples/4-team/config.json
+!examples/4-team/tournament_details.json
+!examples/4-team/teamlist.csv
 
 # latex
 *.aux

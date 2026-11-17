@@ -1,0 +1,11 @@
+{
+  "teamlist": "teamlist.csv",
+  "project_rooms": [
+    "Innovation Room 1",
+    "Innovation Room 2"
+  ],
+  "design_rooms": [
+    "Design Room 1",
+    "Design Room 2"
+  ]
+}
