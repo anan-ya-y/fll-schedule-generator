@@ -63,7 +63,7 @@ def build_model(config: Config) -> BuiltModel:
     nteams = config.effective_nteams
     teams = range(nteams)
     rounds = range(3)
-    positions = range(2)
+    tables = range(config.tournament.ntables)
     matches = range(nteams // 2)
     horizon = parse_time(config.day.venue_closing_time) if config.day.venue_closing_time else 24 * 60
 
@@ -87,11 +87,13 @@ def build_model(config: Config) -> BuiltModel:
     match_starts: dict[tuple[int, int], Any] = {}
     match_assignments: dict[tuple[int, int, int, int], Any] = {}
     match_presence: dict[tuple[int, int, int], Any] = {}
+    table_intervals: dict[int, list[Any]] = {table: [] for table in tables}
     durations = (
         config.table.nminutes_table_rnd1,
         config.table.nminutes_table_allrounds,
         config.table.nminutes_table_allrounds,
     )
+    execution_duration = config.table.nminutes_execution
 
     for round_index in rounds:
         duration = durations[round_index]
@@ -99,7 +101,13 @@ def build_model(config: Config) -> BuiltModel:
             start = model.NewIntVar(0, horizon, f"match_r{round_index + 1}_m{match_index + 1}_start")
             match_starts[round_index, match_index] = start
             if match_index:
-                model.Add(start >= match_starts[round_index, match_index - 1] + duration)
+                # The head referee is needed only for execution. Scoring may
+                # overlap the next match when another pair of tables is free.
+                model.Add(
+                    start
+                    >= match_starts[round_index, match_index - 1]
+                    + execution_duration
+                )
             _add_lunch_disjunction(
                 model,
                 start,
@@ -108,15 +116,35 @@ def build_model(config: Config) -> BuiltModel:
                 config.day.nminutes_lunch,
                 f"match_r{round_index + 1}_m{match_index + 1}",
             )
-            for position in positions:
+            table_usage = []
+            for table in tables:
+                used = model.NewBoolVar(
+                    f"match_r{round_index + 1}_m{match_index + 1}_table{table + 1}_used"
+                )
                 assignment_vars = []
                 for team in teams:
                     variable = model.NewBoolVar(
-                        f"match_r{round_index + 1}_m{match_index + 1}_p{position + 1}_t{team + 1}"
+                        f"match_r{round_index + 1}_m{match_index + 1}_table{table + 1}_t{team + 1}"
                     )
-                    match_assignments[round_index, match_index, position, team] = variable
+                    match_assignments[round_index, match_index, table, team] = variable
                     assignment_vars.append(variable)
-                model.Add(sum(assignment_vars) == 1)
+                model.Add(sum(assignment_vars) == used)
+                table_usage.append(used)
+                table_intervals[table].append(
+                    model.NewOptionalIntervalVar(
+                        start,
+                        duration,
+                        start + duration,
+                        used,
+                        f"match_r{round_index + 1}_m{match_index + 1}_table{table + 1}",
+                    )
+                )
+            # Physical tables are fixed adjacent pairs: (1, 2), (3, 4), etc.
+            # A match occupies exactly one complete pair, never two unrelated
+            # table positions such as Tables 1 and 3.
+            for first_table in range(0, config.tournament.ntables, 2):
+                model.Add(table_usage[first_table] == table_usage[first_table + 1])
+            model.Add(sum(table_usage[::2]) == 1)
 
             for team in teams:
                 present = model.NewBoolVar(
@@ -126,8 +154,8 @@ def build_model(config: Config) -> BuiltModel:
                 model.Add(
                     present
                     == sum(
-                        match_assignments[round_index, match_index, position, team]
-                        for position in positions
+                        match_assignments[round_index, match_index, table, team]
+                        for table in tables
                     )
                 )
 
@@ -137,11 +165,26 @@ def build_model(config: Config) -> BuiltModel:
                 == 1
             )
 
+    # A table remains occupied through scoring, even though the head referee
+    # can move to the next executing match after execution finishes.
+    for table in tables:
+        model.AddNoOverlap(table_intervals[table])
+
     # Anonymous team identities are interchangeable. Canonicalize Round 1 to
     # remove a large amount of equivalent search without restricting schedules.
     for match_index in matches:
-        model.Add(match_assignments[0, match_index, 0, 2 * match_index] == 1)
-        model.Add(match_assignments[0, match_index, 1, 2 * match_index + 1] == 1)
+        for team in (2 * match_index, 2 * match_index + 1):
+            model.Add(
+                sum(
+                    match_assignments[0, match_index, table, team]
+                    for table in tables
+                )
+                == 1
+            )
+    # Table identities are otherwise interchangeable at the beginning of the
+    # day. Pin the first match to the first pair to reduce solver symmetry.
+    model.Add(match_assignments[0, 0, 0, 0] == 1)
+    model.Add(match_assignments[0, 0, 1, 1] == 1)
 
     model.Add(match_starts[0, 0] == match_day_start)
     for round_index in (1, 2):
@@ -154,17 +197,21 @@ def build_model(config: Config) -> BuiltModel:
             >= previous_end + config.table.match_break_duration
         )
 
-    # Every team uses both physical table positions across its three rounds.
+    # Give every team experience on at least two physical tables. With the
+    # traditional two-table setup this preserves the legacy both-tables rule.
     for team in teams:
-        for position in positions:
-            model.Add(
-                sum(
-                    match_assignments[round_index, match_index, position, team]
-                    for round_index in rounds
-                    for match_index in matches
-                )
-                >= 1
+        visited_tables = []
+        for table in tables:
+            visits = sum(
+                match_assignments[round_index, match_index, table, team]
+                for round_index in rounds
+                for match_index in matches
             )
+            visited = model.NewBoolVar(f"team{team + 1}_visited_table{table + 1}")
+            model.Add(visits >= visited)
+            model.Add(visits <= 3 * visited)
+            visited_tables.append(visited)
+        model.Add(sum(visited_tables) >= 2)
 
     # Pairwise opponent uniqueness.
     for first_team in teams:

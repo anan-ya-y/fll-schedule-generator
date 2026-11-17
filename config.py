@@ -38,6 +38,7 @@ class TournamentSettings:
 @dataclass
 class TableSettings:
     match_break_duration: int = 10
+    nminutes_execution: int = 5
     nminutes_table_rnd1: int = 10
     nminutes_table_allrounds: int = 8
 
@@ -98,8 +99,10 @@ class Config:
 
     def validate(self) -> None:
         tournament = self.tournament
-        if tournament.ntables != 2:
-            raise ValueError("The compatible match and printout model requires exactly two tables")
+        if tournament.ntables < 2 or tournament.ntables % 2:
+            raise ValueError(
+                "ntables must be an even number of physical tables (at least 2)"
+            )
         if tournament.ntable_rounds != 3:
             raise ValueError("The optimizer currently requires exactly three table rounds")
         if tournament.nteams <= 0:
@@ -112,14 +115,25 @@ class Config:
             raise ValueError("odd_team_policy must be 'reject' or 'dummy'")
         if tournament.njudging_rooms <= 0:
             raise ValueError("njudging_rooms must be positive")
-        if len(tournament.table_names) != 2:
-            raise ValueError("Exactly two table names are required")
+        if len(tournament.table_names) != tournament.ntables:
+            raise ValueError("table_names must match ntables")
+        if len(set(tournament.table_names)) != len(tournament.table_names):
+            raise ValueError("table_names must be unique")
         if len(tournament.project_room_names) != tournament.njudging_rooms:
             raise ValueError("project_room_names must match njudging_rooms")
         if len(tournament.design_room_names) != tournament.njudging_rooms:
             raise ValueError("design_room_names must match njudging_rooms")
         if self.team.time_between_events < 0:
             raise ValueError("time_between_events cannot be negative")
+        if self.table.nminutes_execution <= 0:
+            raise ValueError("nminutes_execution must be positive")
+        if self.table.nminutes_execution > min(
+            self.table.nminutes_table_rnd1,
+            self.table.nminutes_table_allrounds,
+        ):
+            raise ValueError(
+                "nminutes_execution cannot exceed the total table duration"
+            )
         if self.judging.nteams_per_judging_sprint <= 0:
             raise ValueError("nteams_per_judging_sprint must be positive")
         if self.day.opening_ceremony_duration < 0:

@@ -48,6 +48,13 @@ normalized schedule, the anonymous template, and machine-readable metrics.
 The wizard asks for teams, rooms, times, lunch, closing constraints, and solver
 settings. It creates the input files and can immediately run the schedule.
 
+Enter an even physical-table count. The order of `table_names` defines fixed
+pairs: the first two names are a match pair, the next two are another pair, and
+so on. A pair remains occupied for execution plus scoring (10 minutes in Round 1
+and 8 minutes later by default), while the head referee is reserved only for the
+first 5 execution minutes. This lets scoring overlap a later match on a different
+pair without allowing match executions to overlap.
+
 In the `day` section, `start_time` is the fixed opening-ceremony start.
 `opening_ceremony_duration` blocks all judging and matches until the ceremony ends.
 `judging_start_time` is the fixed first judging time and must not precede the end

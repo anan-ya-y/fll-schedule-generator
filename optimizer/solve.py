@@ -214,22 +214,25 @@ def _extract_anonymous_events(
     for round_index in range(3):
         for match_index in range(nteams // 2):
             start = solver.Value(variables.match_starts[round_index, match_index])
-            for position in range(2):
-                team = next(
+            for table, table_name in enumerate(table_names):
+                assigned_teams = [
                     team
                     for team in range(nteams)
                     if solver.BooleanValue(
                         variables.match_assignments[
-                            round_index, match_index, position, team
+                            round_index, match_index, table, team
                         ]
                     )
-                )
+                ]
+                if not assigned_teams:
+                    continue
+                team = assigned_teams[0]
                 rows.append(
                     {
                         "Time": minute_to_time(start),
                         "EventName": "Table",
                         "RoundNo": round_index + 1,
-                        "Room": table_names[position],
+                        "Room": table_name,
                         "Duration": durations[round_index],
                         "Team": team + 1,
                     }

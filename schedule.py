@@ -117,11 +117,12 @@ class Tournament:
         table_names = table_events["Room"].drop_duplicates().astype(str).tolist()
         project_rooms = project_events["Room"].drop_duplicates().astype(str).tolist()
         design_rooms = design_events["Room"].drop_duplicates().astype(str).tolist()
-        if len(table_names) != 2:
-            raise ValueError("Template rendering requires exactly two table rooms")
+        if len(table_names) < 2:
+            raise ValueError("Template rendering requires at least two table rooms")
         if not project_rooms or len(project_rooms) != len(design_rooms):
             raise ValueError("Template must have equal nonzero Project and Design room counts")
         config.tournament.table_names = table_names
+        config.tournament.ntables = len(table_names)
         config.tournament.njudging_rooms = len(project_rooms)
         config.tournament.project_room_names = project_rooms
         config.tournament.design_room_names = design_rooms
@@ -131,6 +132,11 @@ class Tournament:
         later_rounds = table_events[table_events["RoundNo"] > 1]
         config.table.nminutes_table_rnd1 = int(round_one["Duration"].mode().iloc[0])
         config.table.nminutes_table_allrounds = int(later_rounds["Duration"].mode().iloc[0])
+        config.table.nminutes_execution = min(
+            5,
+            config.table.nminutes_table_rnd1,
+            config.table.nminutes_table_allrounds,
+        )
         config.table.match_break_duration = 0
         config.judging.nminutes_judging = int(
             pd.concat([project_events, design_events])["Duration"].mode().iloc[0]

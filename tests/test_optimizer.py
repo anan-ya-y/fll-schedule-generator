@@ -10,7 +10,7 @@ import pandas as pd
 from config import Config
 from schedule import FINAL_EVENT_COLUMNS, Tournament
 from schedule_html import create_all_rooms_schedule
-from schedule_latex import create_fllt
+from schedule_latex import _paired_table_rows, create_fllt
 from statistics_report import create_statistics_report
 from validation import validate_tournament
 
@@ -173,6 +173,13 @@ class OptimizerIntegrationTests(unittest.TestCase):
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_table_count_must_form_complete_pairs(self) -> None:
+        config = Config()
+        config.tournament.ntables = 3
+        config.tournament.table_names = ["Table 1", "Table 2", "Table 3"]
+        with self.assertRaisesRegex(ValueError, "even number"):
+            config.validate()
+
     def test_judging_start_must_follow_opening(self) -> None:
         config = Config()
         config.day.start_time = "08:00"
@@ -205,6 +212,76 @@ class ConfigurationTests(unittest.TestCase):
         config.tournament.odd_team_policy = "dummy"
         config.validate()
         self.assertEqual(config.effective_nteams, 6)
+
+
+@unittest.skipIf(optimize is None, "OR-Tools is not installed")
+class MultiTableOptimizerTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        config = small_config()
+        config.tournament.ntables = 4
+        config.tournament.table_names = [
+            "Table 1",
+            "Table 2",
+            "Table 3",
+            "Table 4",
+        ]
+        config.solver.max_time_seconds = 30
+        cls.result = optimize(config)
+        cls.tournament = Tournament.from_optimization(cls.result, team_list())
+
+    def test_matches_use_only_configured_adjacent_pairs(self) -> None:
+        table_events = self.tournament.events[
+            self.tournament.events["EventName"] == "Table"
+        ]
+        allowed_pairs = {
+            frozenset(("Table 1", "Table 2")),
+            frozenset(("Table 3", "Table 4")),
+        }
+        used_pairs = set()
+        for _, match in table_events.groupby(["RoundNo", "Time"]):
+            pair = frozenset(match["Room"])
+            self.assertIn(pair, allowed_pairs)
+            used_pairs.add(pair)
+        self.assertEqual(used_pairs, allowed_pairs)
+
+    def test_scoring_can_overlap_but_executions_do_not(self) -> None:
+        table_events = self.tournament.events[
+            self.tournament.events["EventName"] == "Table"
+        ]
+        round_one_starts = sorted(
+            value.hour * 60 + value.minute
+            for value in table_events.loc[
+                table_events["RoundNo"] == 1, "Time"
+            ].unique()
+        )
+        self.assertEqual(
+            round_one_starts[1] - round_one_starts[0],
+            self.result.config.table.nminutes_execution,
+        )
+        self.assertLess(
+            round_one_starts[1],
+            round_one_starts[0]
+            + self.result.config.table.nminutes_table_rnd1,
+        )
+
+    def test_multitable_schedule_validates_and_keeps_finish_objective(self) -> None:
+        validate_tournament(self.tournament)
+        self.assertIn("maximum_judging_table_separation", self.result.stages)
+        self.assertEqual(
+            self.result.judging_table_separation,
+            self.result.table_finish - self.result.judging_finish,
+        )
+
+    def test_operational_print_rows_preserve_table_pairs(self) -> None:
+        allowed_pairs = {
+            frozenset(("Table 1", "Table 2")),
+            frozenset(("Table 3", "Table 4")),
+        }
+        rows = list(_paired_table_rows(self.tournament))
+        self.assertTrue(rows)
+        for _, first, second in rows:
+            self.assertIn(frozenset((first.Room, second.Room)), allowed_pairs)
 
 
 if __name__ == "__main__":

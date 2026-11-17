@@ -7,6 +7,15 @@ between any team's events. It retains the `main` branch's `Tournament.events`
 DataFrame and FLLTournament CSV contracts. An optional weighted objective mode
 allows those three goals to be traded against one another.
 
+Table counts may be any even number. Tables are fixed into adjacent pairs in
+configuration order (`1+2`, `3+4`, and so on). Match execution uses the head
+referee for five minutes and therefore never overlaps another match execution;
+the remaining scoring time continues to occupy that table pair but may overlap
+the next match on a different pair. The defaults are five scoring minutes in
+Round 1 and three scoring minutes in Rounds 2 and 3.
+
+NOTE: TO GET THE SHORTEST TOURNAMENT POSSIBLE, PUT THE END TIME AS EARLY AS POSSIBLE
+
 ## Setup
 
 The project uses the `venv` directory (not `.venv`). From Bash in Linux or WSL,
