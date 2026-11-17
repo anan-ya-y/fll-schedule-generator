@@ -1,0 +1,4 @@
+ortools>=9.14,<10
+pandas>=2.3,<3
+PyLaTeX==1.4.2
+
