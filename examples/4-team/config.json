@@ -38,6 +38,7 @@
     "objective_mode": "lexicographic",
     "overall_finish_weight": 10,
     "judging_separation_weight": 5,
+    "table_diversity_weight": 1,
     "minimum_gap_weight": 1,
     "log_search_progress": false
   }
