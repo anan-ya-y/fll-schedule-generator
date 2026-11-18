@@ -2,10 +2,11 @@
 
 This branch replaces randomized schedule generation with an OR-Tools CP-SAT model.
 By default it finds the earliest competitive finish, maximizes the time from
-judging completion to table completion, and then maximizes the smallest gap
-between any team's events. It retains the `main` branch's `Tournament.events`
+judging completion to table completion, maximizes physical-table variety for
+each team, and then maximizes the smallest gap between any team's events. It
+retains the `main` branch's `Tournament.events`
 DataFrame and FLLTournament CSV contracts. An optional weighted objective mode
-allows those three goals to be traded against one another.
+allows those four goals to be traded against one another.
 
 Table counts may be any even number. Tables are fixed into adjacent pairs in
 configuration order (`1+2`, `3+4`, and so on). Match execution uses the head
@@ -13,6 +14,12 @@ referee for five minutes and therefore never overlaps another match execution;
 the remaining scoring time continues to occupy that table pair but may overlap
 the next match on a different pair. The defaults are five scoring minutes in
 Round 1 and three scoring minutes in Rounds 2 and 3.
+
+Within each round, consecutive matches cycle through those pairs in order. With
+six tables the route is `1+2`, `3+4`, `5+6`, then back to `1+2`. If a pair is
+still scoring when its next turn arrives, the match waits until the pair is free.
+Within that route, team assignments prefer a different physical table in every
+round; with three rounds, the ideal is three distinct tables per team.
 
 NOTE: TO GET THE SHORTEST TOURNAMENT POSSIBLE, PUT THE END TIME AS EARLY AS POSSIBLE
 
@@ -47,7 +54,9 @@ Distribute `dist\FLL Schedule Generator.exe`. The recipient can double-click tha
 file; Python and the repository are not required. CSV, HTML, statistics, and saved
 schedule files work without additional software. The five PDFs additionally need
 `pdflatex` on the recipient's `PATH` (for example, from MiKTeX); the app detects
-this and disables the PDF option when it is unavailable.
+this when rendering. It tries `latexmk` first and falls back to `pdflatex`; if the
+installed LaTeX toolchain still cannot compile the printouts, the CSV, HTML,
+statistics, and schedule files remain available and the GUI reports a warning.
 
 ## Setup
 

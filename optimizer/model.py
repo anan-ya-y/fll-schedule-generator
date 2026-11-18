@@ -21,6 +21,7 @@ class ModelVariables:
     finish: Any
     judging_finish: Any
     table_finish: Any
+    table_diversity: Any
     min_gap: Any
     match_starts: dict[tuple[int, int], Any]
     match_assignments: dict[tuple[int, int, int, int], Any]
@@ -47,6 +48,8 @@ def _add_lunch_disjunction(
     name: str,
     presence: Any | None = None,
 ) -> None:
+    if lunch_duration <= 0:
+        return
     before = model.NewBoolVar(f"{name}_before_lunch")
     before_conditions = [before]
     after_conditions = [before.Not()]
@@ -64,6 +67,7 @@ def build_model(config: Config) -> BuiltModel:
     teams = range(nteams)
     rounds = range(3)
     tables = range(config.tournament.ntables)
+    table_pair_count = config.tournament.ntables // 2
     matches = range(nteams // 2)
     horizon = 24 * 60
 
@@ -146,6 +150,12 @@ def build_model(config: Config) -> BuiltModel:
                 model.Add(table_usage[first_table] == table_usage[first_table + 1])
             model.Add(sum(table_usage[::2]) == 1)
 
+            # Keep the head referee's route predictable within every round.
+            # Matches cycle through the physical pairs in configuration order,
+            # returning to the first pair after the last one.
+            assigned_pair = match_index % table_pair_count
+            model.Add(table_usage[2 * assigned_pair] == 1)
+
             for team in teams:
                 present = model.NewBoolVar(
                     f"match_r{round_index + 1}_m{match_index + 1}_t{team + 1}_present"
@@ -197,8 +207,10 @@ def build_model(config: Config) -> BuiltModel:
             >= previous_end + config.table.match_break_duration
         )
 
-    # Give every team experience on at least two physical tables. With the
-    # traditional two-table setup this preserves the legacy both-tables rule.
+    # Track how many different physical tables each team visits. Two distinct
+    # tables remain mandatory; the solver can then maximize the total toward
+    # the three-table ideal for a three-round tournament.
+    visited_table_vars = []
     for team in teams:
         visited_tables = []
         for table in tables:
@@ -211,7 +223,14 @@ def build_model(config: Config) -> BuiltModel:
             model.Add(visits >= visited)
             model.Add(visits <= 3 * visited)
             visited_tables.append(visited)
+            visited_table_vars.append(visited)
         model.Add(sum(visited_tables) >= 2)
+    table_diversity = model.NewIntVar(
+        0,
+        nteams * min(3, config.tournament.ntables),
+        "total_distinct_team_table_assignments",
+    )
+    model.Add(table_diversity == sum(visited_table_vars))
 
     # Pairwise opponent uniqueness.
     for first_team in teams:
@@ -365,6 +384,7 @@ def build_model(config: Config) -> BuiltModel:
         finish=finish,
         judging_finish=judging_finish,
         table_finish=table_finish,
+        table_diversity=table_diversity,
         min_gap=min_gap,
         match_starts=match_starts,
         match_assignments=match_assignments,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 import json
 from pathlib import Path
@@ -28,6 +28,7 @@ class WorkflowResult:
     optimization: OptimizationResult
     validation: ValidationReport
     files: list[Path]
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -35,12 +36,37 @@ class TemplateRenderResult:
     tournament: Tournament
     validation: ValidationReport
     files: list[Path]
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass
 class AnonymousTemplateResult:
     optimization: OptimizationResult
     files: list[Path]
+
+
+def _create_pdf_printouts(
+    tournament: Tournament,
+    output: Path,
+    files: list[Path],
+    warnings: list[str],
+) -> None:
+    renderers = (
+        create_emcee_schedule,
+        create_judging_schedule,
+        create_ref_schedule,
+        create_team_schedule,
+        create_room_schedule,
+    )
+    for renderer in renderers:
+        try:
+            files.append(renderer(tournament, output))
+        except Exception as error:
+            warnings.append(
+                "PDF schedule printouts were skipped because the LaTeX toolchain "
+                f"could not compile them: {error}"
+            )
+            break
 
 
 def generate_anonymous_template(
@@ -124,17 +150,10 @@ def generate_schedule(
             output,
         )
     )
+    warnings: list[str] = []
     if generate_pdfs:
-        files.extend(
-            [
-                create_emcee_schedule(tournament, output),
-                create_judging_schedule(tournament, output),
-                create_ref_schedule(tournament, output),
-                create_team_schedule(tournament, output),
-                create_room_schedule(tournament, output),
-            ]
-        )
-    return WorkflowResult(tournament, optimization, validation, files)
+        _create_pdf_printouts(tournament, output, files, warnings)
+    return WorkflowResult(tournament, optimization, validation, files, warnings)
 
 
 def load_and_generate(
@@ -148,6 +167,7 @@ def load_and_generate(
     objective_mode: str | None = None,
     overall_finish_weight: int | None = None,
     judging_separation_weight: int | None = None,
+    table_diversity_weight: int | None = None,
     minimum_gap_weight: int | None = None,
 ) -> WorkflowResult:
     config = Config.from_json(config_path) if config_path else Config()
@@ -164,6 +184,8 @@ def load_and_generate(
         config.solver.overall_finish_weight = overall_finish_weight
     if judging_separation_weight is not None:
         config.solver.judging_separation_weight = judging_separation_weight
+    if table_diversity_weight is not None:
+        config.solver.table_diversity_weight = table_diversity_weight
     if minimum_gap_weight is not None:
         config.solver.minimum_gap_weight = minimum_gap_weight
     return generate_schedule(
@@ -217,14 +239,7 @@ def render_solved_template(
     )
     if tournament_date:
         files.append(create_fllt(tournament, output, tournament_date))
+    warnings: list[str] = []
     if generate_pdfs:
-        files.extend(
-            [
-                create_emcee_schedule(tournament, output),
-                create_judging_schedule(tournament, output),
-                create_ref_schedule(tournament, output),
-                create_team_schedule(tournament, output),
-                create_room_schedule(tournament, output),
-            ]
-        )
-    return TemplateRenderResult(tournament, validation, files)
+        _create_pdf_printouts(tournament, output, files, warnings)
+    return TemplateRenderResult(tournament, validation, files, warnings)

@@ -10,7 +10,7 @@ import pandas as pd
 from config import Config
 from schedule import FINAL_EVENT_COLUMNS, Tournament
 from schedule_html import create_all_rooms_schedule
-from schedule_latex import _paired_table_rows, create_fllt
+from schedule_latex import _create_pair_schedule_document, _paired_table_rows, create_fllt
 from statistics_report import create_statistics_report
 from validation import validate_tournament
 
@@ -101,6 +101,31 @@ class OptimizerIntegrationTests(unittest.TestCase):
         self.assertIn("weighted_objective", result.stages)
         self.assertGreaterEqual(result.minimum_gap, config.team.time_between_events)
 
+    def test_zero_duration_lunch_is_not_scheduled(self) -> None:
+        config = small_config()
+        config.day.lunch_start = "08:35"
+        config.day.nminutes_lunch = 0
+        result = optimize(config)
+        tournament = Tournament.from_optimization(
+            result,
+            team_list(),
+            room_details(),
+        )
+
+        self.assertNotIn("Lunch", set(tournament.events["EventName"]))
+        judging = tournament.events[
+            tournament.events["EventName"].isin({"Project", "Design"})
+        ]
+        self.assertTrue(
+            any(
+                row.Time.hour * 60 + row.Time.minute < 8 * 60 + 35
+                and row.Time.hour * 60 + row.Time.minute + int(row.Duration)
+                > 8 * 60 + 35
+                for row in judging.itertuples(index=False)
+            )
+        )
+        validate_tournament(tournament)
+
     def test_matches_have_two_synchronized_table_positions(self) -> None:
         table_events = self.tournament.events[
             self.tournament.events["EventName"] == "Table"
@@ -139,6 +164,20 @@ class OptimizerIntegrationTests(unittest.TestCase):
             self.assertNotIn("Design", {row["Type"] for row in rows})
             self.assertNotIn("Break", {row["Type"] for row in rows})
 
+    def test_pair_printouts_avoid_longtable_and_escape_notes(self) -> None:
+        tournament = self.tournament
+        original_events = tournament.events
+        try:
+            tournament.events = original_events.copy()
+            first_table = tournament.events["EventName"] == "Table"
+            tournament.events.loc[first_table, "Note"] = "A&B"
+            source = _create_pair_schedule_document(tournament, include_notes=True).dumps()
+        finally:
+            tournament.events = original_events
+        self.assertIn(r"A\&B", source)
+        self.assertNotIn(r"\begin{longtable}", source)
+        self.assertIn(r"\begin{tabular}", source)
+
     def test_all_rooms_visualization_uses_team_colors_and_zoom(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             destination = create_all_rooms_schedule(self.tournament, directory)
@@ -168,6 +207,7 @@ class OptimizerIntegrationTests(unittest.TestCase):
         self.assertIn("Population standard deviation:", content)
         self.assertIn("ROOM DAY LENGTHS", content)
         self.assertIn("Table 1", content)
+        self.assertIn("Distinct team-table assignments:", content)
 
     def test_solved_template_can_attach_teams_without_config(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
@@ -288,6 +328,41 @@ class MultiTableOptimizerTests(unittest.TestCase):
             used_pairs.add(pair)
         self.assertEqual(used_pairs, allowed_pairs)
 
+    def test_matches_follow_head_referee_pair_order(self) -> None:
+        table_events = self.tournament.events[
+            self.tournament.events["EventName"] == "Table"
+        ]
+        expected = [
+            frozenset(("Table 1", "Table 2")),
+            frozenset(("Table 3", "Table 4")),
+        ]
+        for _, round_events in table_events.groupby("RoundNo", sort=True):
+            actual = [
+                frozenset(match["Room"])
+                for _, match in round_events.groupby("Time", sort=True)
+            ]
+            self.assertEqual(actual, expected)
+
+    def test_six_table_route_reaches_last_pair_and_cycles(self) -> None:
+        config = small_config()
+        config.tournament.nteams = 8
+        config.tournament.ntables = 6
+        config.solver.max_time_seconds = 10
+        result = optimize(config)
+        table_events = result.events[result.events["EventName"] == "Table"]
+        expected = [
+            frozenset(("Table 1", "Table 2")),
+            frozenset(("Table 3", "Table 4")),
+            frozenset(("Table 5", "Table 6")),
+            frozenset(("Table 1", "Table 2")),
+        ]
+        for _, round_events in table_events.groupby("RoundNo", sort=True):
+            actual = [
+                frozenset(match["Room"])
+                for _, match in round_events.groupby("Time", sort=True)
+            ]
+            self.assertEqual(actual, expected)
+
     def test_scoring_can_overlap_but_executions_do_not(self) -> None:
         table_events = self.tournament.events[
             self.tournament.events["EventName"] == "Table"
@@ -311,9 +386,27 @@ class MultiTableOptimizerTests(unittest.TestCase):
     def test_multitable_schedule_validates_and_keeps_finish_objective(self) -> None:
         validate_tournament(self.tournament)
         self.assertIn("maximum_judging_table_separation", self.result.stages)
+        self.assertIn("maximum_table_diversity", self.result.stages)
         self.assertEqual(
             self.result.judging_table_separation,
             self.result.table_finish - self.result.judging_finish,
+        )
+
+    def test_table_diversity_reaches_best_possible_score(self) -> None:
+        table_events = self.tournament.events[
+            self.tournament.events["EventName"] == "Table"
+        ]
+        distinct_counts = table_events.groupby("Team ID")["Room"].nunique()
+        self.assertTrue((distinct_counts >= 2).all())
+        self.assertEqual((distinct_counts == 3).sum(), 3)
+        self.assertEqual(
+            self.result.table_diversity,
+            int(distinct_counts.sum()),
+        )
+        self.assertEqual(self.result.table_diversity, 11)
+        self.assertEqual(
+            self.result.metrics()["distinct_team_table_assignments"],
+            self.result.table_diversity,
         )
 
     def test_operational_print_rows_preserve_table_pairs(self) -> None:

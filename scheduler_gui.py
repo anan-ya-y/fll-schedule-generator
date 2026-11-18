@@ -509,13 +509,20 @@ class SchedulerApp(tk.Tk):
             heading = "TEMPLATE RENDER COMPLETE"
             gap_line = f"Minimum team gap: {result.validation.minimum_gap} minutes\n"
         files = "\n".join(f"  • {Path(path).name}" for path in result.files)
+        warnings = getattr(result, "warnings", [])
+        warning_text = ""
+        if warnings:
+            warning_text = "\n\nWarnings\n" + "\n".join(
+                f"  • {warning}" for warning in warnings
+            )
         self._write_results(
             f"{heading}\n\n"
             f"{gap_line}"
             f"Results folder: {request.output_directory}\n\n"
             f"{summary}Created files\n{files}"
+            f"{warning_text}"
         )
-        self.status_var.set("Complete")
+        self.status_var.set("Complete with warnings" if warnings else "Complete")
         self.open_results_button.configure(state="normal")
         timeline = request.output_directory / "all_rooms_schedule.html"
         self.open_timeline_button.configure(

@@ -85,25 +85,39 @@ def validate_tournament(tournament: Tournament) -> ValidationReport:
     for row in table_events.itertuples(index=False):
         if int(row.Duration) != expected_table_durations[int(row.RoundNo)]:
             raise ValueError(f"Incorrect duration for Table Round {row.RoundNo}")
-    table_pairs = {
-        frozenset(tournament.table_names[index : index + 2])
+    ordered_table_pairs = [
+        tuple(tournament.table_names[index : index + 2])
         for index in range(0, config.tournament.ntables, 2)
-    }
+    ]
+    valid_table_pairs = {frozenset(pair) for pair in ordered_table_pairs}
     opponents: set[tuple[int, int]] = set()
-    for (round_no, start), match in table_events.groupby(["RoundNo", "Time"]):
-        rooms = set(match["Room"])
-        if (
-            len(match) != 2
-            or len(rooms) != 2
-            or frozenset(rooms) not in table_pairs
+    for round_no, round_events in table_events.groupby("RoundNo", sort=True):
+        for match_index, (start, match) in enumerate(
+            round_events.groupby("Time", sort=True)
         ):
-            raise ValueError(
-                f"Round {round_no} at {start} does not use one complete table pair"
-            )
-        pair = tuple(sorted(int(value) for value in match["Team ID"]))
-        if pair in opponents:
-            raise ValueError(f"Repeated opponent pairing: {pair}")
-        opponents.add(pair)
+            rooms = set(match["Room"])
+            actual_pair = frozenset(rooms)
+            if (
+                len(match) != 2
+                or len(rooms) != 2
+                or actual_pair not in valid_table_pairs
+            ):
+                raise ValueError(
+                    f"Round {round_no} at {start} does not use one complete table pair"
+                )
+            expected_pair = ordered_table_pairs[
+                match_index % len(ordered_table_pairs)
+            ]
+            if actual_pair != frozenset(expected_pair):
+                raise ValueError(
+                    f"Round {round_no} match {match_index + 1} uses "
+                    f"{tuple(match['Room'])}; expected {expected_pair} in the "
+                    "head-referee table sequence"
+                )
+            opponent_pair = tuple(sorted(int(value) for value in match["Team ID"]))
+            if opponent_pair in opponents:
+                raise ValueError(f"Repeated opponent pairing: {opponent_pair}")
+            opponents.add(opponent_pair)
 
     match_starts = sorted({_minutes(value) for value in table_events["Time"]})
     for previous, current in zip(match_starts, match_starts[1:]):
@@ -156,13 +170,18 @@ def validate_tournament(tournament: Tournament) -> ValidationReport:
                 raise ValueError(f"Resource overlap in {room} at {row.Time}")
             previous_end = start + int(row.Duration)
 
-    lunch_start = tournament.optimization_result.lunch_start if tournament.optimization_result else parse_time(config.day.lunch_start)
-    lunch_end = lunch_start + config.day.nminutes_lunch
-    for row in competitive.itertuples(index=False):
-        start = _minutes(row.Time)
-        end = start + int(row.Duration)
-        if start < lunch_end and end > lunch_start:
-            raise ValueError(f"{row.EventName} in {row.Room} overlaps lunch")
+    if config.day.nminutes_lunch > 0:
+        lunch_start = (
+            tournament.optimization_result.lunch_start
+            if tournament.optimization_result
+            else parse_time(config.day.lunch_start)
+        )
+        lunch_end = lunch_start + config.day.nminutes_lunch
+        for row in competitive.itertuples(index=False):
+            start = _minutes(row.Time)
+            end = start + int(row.Duration)
+            if start < lunch_end and end > lunch_start:
+                raise ValueError(f"{row.EventName} in {row.Room} overlaps lunch")
 
     if tournament.optimization_result is not None:
         result = tournament.optimization_result
