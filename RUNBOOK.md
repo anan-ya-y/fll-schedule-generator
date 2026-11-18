@@ -2,6 +2,25 @@
 
 All commands below are run from Bash in Linux or WSL, from the repository root.
 
+## Desktop interface for tournament staff
+
+Windows users can run `FLL Schedule Generator.exe` without installing Python.
+The app walks through setup, teams, schedule times, advanced settings, and results.
+Use **File > Save setup** to save reusable inputs, or **File > Open saved setup**
+to reopen a setup folder later. **Generate schedule** runs the optimizer in the
+background and enables buttons to open the combined timeline and result folder.
+
+To prepare the distributable executable, a developer runs the following once in
+PowerShell on Windows with Python 3.12 or 3.13 installed:
+
+```powershell
+.\build_windows.ps1
+```
+
+The output is `dist\FLL Schedule Generator.exe`. A LaTeX distribution such as
+MiKTeX is optional: without `pdflatex`, the GUI produces all non-PDF results and
+clearly disables the PDF checkbox.
+
 ## 1. Prepare the environment once
 
 ```bash
@@ -48,9 +67,10 @@ normalized schedule, the anonymous template, and machine-readable metrics.
 The wizard asks for teams, rooms, times, lunch, closing constraints, and solver
 settings. It creates the input files and can immediately run the schedule.
 
-Enter an even physical-table count. The order of `table_names` defines fixed
-pairs: the first two names are a match pair, the next two are another pair, and
-so on. A pair remains occupied for execution plus scoring (10 minutes in Round 1
+Enter an even physical-table count. The order of `table_rooms` in
+`tournament_details.json` names the solver's fixed pairs: the first two names are
+a match pair, the next two are another pair, and so on. A pair remains occupied
+for execution plus scoring (10 minutes in Round 1
 and 8 minutes later by default), while the head referee is reserved only for the
 first 5 execution minutes. This lets scoring overlap a later match on a different
 pair without allowing match executions to overlap.
@@ -125,14 +145,15 @@ rounds run later, so review the resulting finish times in `stats.txt`.
 
 ## 5. Render an already-solved template without a config
 
-When the anonymous template has already been optimized, provide only the template
-CSV, the team-list CSV, and an output folder:
+When the anonymous template has already been optimized, provide the template,
+the tournament-details file (which references the team list), and an output
+folder:
 
 ```bash
-./run_template.sh \
-  path/to/tournament_schedule_template.csv \
-  path/to/teamlist.csv \
-  output/rendered
+venv/bin/python render_template.py \
+  --template path/to/tournament_schedule_template.csv \
+  --tournament-details path/to/tournament_details.json \
+  --output output/rendered
 ```
 
 The template must contain `Time`, `EventName`, `RoundNo`, `Room`, `Duration`, and
@@ -143,14 +164,19 @@ The team list needs `Team #` and `Team Name`. `Distance` is optional in render-o
 mode; when omitted, input row order determines which teams receive the earlier
 anonymous schedules. `Note` is also optional.
 
-This command does not invoke OR-Tools. It attaches the teams, validates the solved
+This command does not invoke OR-Tools. It replaces generic room identifiers with
+the names in `tournament_details.json`, attaches the teams, validates the solved
 template, and generates all five PDFs, `all_rooms_schedule.html`, `stats.txt`, and
 the normalized schedule CSV.
 
-To also create the FLLTournament CSV, add the date as the fourth argument:
+To also create the FLLTournament CSV, add a tournament date:
 
 ```bash
-./run_template.sh template.csv teams.csv output/rendered 1/31/2027
+venv/bin/python render_template.py \
+  --template template.csv \
+  --tournament-details tournament_details.json \
+  --output output/rendered \
+  --tournament-date 1/31/2027
 ```
 
 ## 6. Test the installation

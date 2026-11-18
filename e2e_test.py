@@ -25,8 +25,6 @@ def main() -> None:
 
     config = Config()
     config.tournament.nteams = 4
-    config.tournament.project_room_names = ["Project A", "Project B"]
-    config.tournament.design_room_names = ["Design A", "Design B"]
     config.day.start_time = "08:00"
     config.day.matches_start_time = "11:30"
     config.day.lunch_start = "13:00"
@@ -49,8 +47,9 @@ def main() -> None:
     config.to_json(inputs / "config.json")
     details = {
         "teamlist": str(team_list_path),
-        "project_rooms": config.tournament.project_room_names,
-        "design_rooms": config.tournament.design_room_names,
+        "table_rooms": ["Table A", "Table B"],
+        "project_rooms": ["Project A", "Project B"],
+        "design_rooms": ["Design A", "Design B"],
     }
     with (inputs / "tournament_details.json").open("w", encoding="utf-8") as handle:
         json.dump(details, handle, indent=4)

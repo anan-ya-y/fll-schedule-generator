@@ -272,7 +272,7 @@ def create_room_schedule(tournament: Tournament, output_folder: str | Path) -> P
 
 def _paired_table_rows(tournament: Tournament):
     """Yield table-room events as configured physical pairs at each time."""
-    table_names = tournament.config.tournament.table_names
+    table_names = tournament.table_names
     table_events = tournament.events[
         tournament.events["Room"].isin(table_names)
     ]

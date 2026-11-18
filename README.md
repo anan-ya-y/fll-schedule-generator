@@ -16,6 +16,33 @@ Round 1 and three scoring minutes in Rounds 2 and 3.
 
 NOTE: TO GET THE SHORTEST TOURNAMENT POSSIBLE, PUT THE END TIME AS EARLY AS POSSIBLE
 
+## Desktop app
+
+`scheduler_gui.py` provides a native desktop interface for organizers who do not
+use the Python command line. It supports team CSV import and editing, reusable
+setup folders, guided tournament settings, background optimization, validation,
+and one-click access to the generated timeline and result folder.
+
+For development, launch it from an installed environment with:
+
+```sh
+venv/bin/python scheduler_gui.py
+```
+
+To hand the application to a Windows user who does not have Python, build the
+standalone executable once from PowerShell on a Windows machine with Python 3.12
+or 3.13:
+
+```powershell
+.\build_windows.ps1
+```
+
+Distribute `dist\FLL Schedule Generator.exe`. The recipient can double-click that
+file; Python and the repository are not required. CSV, HTML, statistics, and saved
+schedule files work without additional software. The five PDFs additionally need
+`pdflatex` on the recipient's `PATH` (for example, from MiKTeX); the app detects
+this and disables the PDF option when it is unavailable.
+
 ## Setup
 
 The project uses the `venv` directory (not `.venv`). From Bash in Linux or WSL,
@@ -62,11 +89,12 @@ creates `all_rooms_schedule.html`, an interactive timeline containing all table,
 Innovation, and Design rooms at once. It also writes `stats.txt` with team-gap,
 room-day-length, utilization, and solver statistics.
 
-Tournament details use the legacy shape:
+Tournament-specific names are kept outside the solver config:
 
 ```json
 {
   "teamlist": "teamlist.csv",
+  "table_rooms": ["Table 1", "Table 2"],
   "project_rooms": ["P1", "P2"],
   "design_rooms": ["D1", "D2"]
 }
@@ -80,11 +108,15 @@ example.
 If a template is already solved, no configuration file is needed:
 
 ```sh
-./run_template.sh template.csv teamlist.csv output/rendered
+venv/bin/python render_template.py \
+  --template template.csv \
+  --tournament-details tournament_details.json \
+  --output output/rendered
 ```
 
-Add a tournament date as the fourth argument when an FLLTournament CSV is also
-needed.
+Add `--tournament-date 1/31/2027` when an FLLTournament CSV is also needed. This
+path does not run the optimizer; it fills the anonymous solution with the room
+names and team list referenced by `tournament_details.json`.
 
 ## End-to-end verification
 

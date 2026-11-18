@@ -1,23 +1,9 @@
 {
-  "seed": 2025,
   "tournament": {
     "nteams": 4,
     "njudging_rooms": 2,
     "ntables": 2,
-    "ntable_rounds": 3,
-    "project_room_names": [
-      "Innovation Room 1",
-      "Innovation Room 2"
-    ],
-    "design_room_names": [
-      "Design Room 1",
-      "Design Room 2"
-    ],
-    "table_names": [
-      "Table 1",
-      "Table 2"
-    ],
-    "odd_team_policy": "reject"
+    "ntable_rounds": 3
   },
   "table": {
     "match_break_duration": 10,
@@ -39,9 +25,7 @@
     "nminutes_lunch": 30,
     "closing_ceremony_time": "17:00",
     "closing_ceremony_time_latest": "18:00",
-    "closing_ceremony_duration": 45,
-    "deliberation_duration": 0,
-    "venue_closing_time": "19:00"
+    "deliberation_duration": 0
   },
   "team": {
     "time_between_events": 10

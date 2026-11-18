@@ -86,7 +86,7 @@ def validate_tournament(tournament: Tournament) -> ValidationReport:
         if int(row.Duration) != expected_table_durations[int(row.RoundNo)]:
             raise ValueError(f"Incorrect duration for Table Round {row.RoundNo}")
     table_pairs = {
-        frozenset(config.tournament.table_names[index : index + 2])
+        frozenset(tournament.table_names[index : index + 2])
         for index in range(0, config.tournament.ntables, 2)
     }
     opponents: set[tuple[int, int]] = set()
@@ -186,13 +186,6 @@ def validate_tournament(tournament: Tournament) -> ValidationReport:
             raise ValueError("Closing starts before competitive events finish")
         if result.closing_start < judging_finish + config.day.deliberation_duration:
             raise ValueError("Closing starts before judging deliberation can finish")
-        if config.day.venue_closing_time is not None:
-            if (
-                result.closing_start + config.day.closing_ceremony_duration
-                > parse_time(config.day.venue_closing_time)
-            ):
-                raise ValueError("Closing ceremony ends after the venue closes")
-
     if minimum_gap == 10**9:
         raise ValueError("No team gaps were found")
     return ValidationReport(minimum_gap, limiting_team, limiting_events)
