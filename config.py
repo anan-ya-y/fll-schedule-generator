@@ -76,6 +76,7 @@ class SolverSettings:
     objective_mode: str = "lexicographic"
     overall_finish_weight: int = 10
     judging_separation_weight: int = 5
+    table_diversity_weight: int = 1
     minimum_gap_weight: int = 1
     log_search_progress: bool = False
 
@@ -121,6 +122,7 @@ class Config:
         objective_weights = (
             self.solver.overall_finish_weight,
             self.solver.judging_separation_weight,
+            self.solver.table_diversity_weight,
             self.solver.minimum_gap_weight,
         )
         if any(weight < 0 for weight in objective_weights):

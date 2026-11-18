@@ -192,6 +192,14 @@ def create_statistics_report(
         lines.append("Render-only mode: an existing solved template was used; no optimizer was run.")
     else:
         lines.append(f"Optimized minimum gap: {_duration(optimization.minimum_gap)}")
+        ideal_table_diversity = (
+            optimization.config.effective_nteams
+            * min(3, optimization.config.tournament.ntables)
+        )
+        lines.append(
+            "Distinct team-table assignments: "
+            f"{optimization.table_diversity} of {ideal_table_diversity}"
+        )
         lines.append(
             "Opening ceremony: "
             f"{_clock(optimization.opening_start)} - "

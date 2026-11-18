@@ -28,6 +28,7 @@ def _arguments() -> argparse.Namespace:
     )
     parser.add_argument("--overall_finish_weight", type=int)
     parser.add_argument("--judging_separation_weight", type=int)
+    parser.add_argument("--table_diversity_weight", type=int)
     parser.add_argument("--minimum_gap_weight", type=int)
     return parser.parse_args()
 
@@ -45,6 +46,7 @@ def main() -> None:
         objective_mode=args.objective_mode,
         overall_finish_weight=args.overall_finish_weight,
         judging_separation_weight=args.judging_separation_weight,
+        table_diversity_weight=args.table_diversity_weight,
         minimum_gap_weight=args.minimum_gap_weight,
     )
 
@@ -65,6 +67,8 @@ def main() -> None:
         f"Limiting team: {result.validation.limiting_team} "
         f"({result.validation.limiting_events[0]} -> {result.validation.limiting_events[1]})"
     )
+    for warning in result.warnings:
+        print(f"WARNING: {warning}")
 
 
 if __name__ == "__main__":

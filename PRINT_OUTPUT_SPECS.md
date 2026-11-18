@@ -311,6 +311,8 @@ aligned and Team 2 is right aligned.
 - Tables are paired in configuration order: the first two table names form one
   pair, the next two form another pair, and so on. The first table in the pair
   becomes Team 1 and the second becomes Team 2.
+- Within every round, matches visit those pairs in configuration order and cycle
+  back to the first pair after the last pair.
 - Positive team display is `<team number>: <team name>`.
 - Zero or negative team display is uppercase `TeamName`, normally `BREAK` or
   `LUNCH`.

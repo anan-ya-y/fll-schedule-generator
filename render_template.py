@@ -43,6 +43,8 @@ def main() -> None:
     print(f"Files written: {len(result.files)}")
     for path in result.files:
         print(f" - {path}")
+    for warning in result.warnings:
+        print(f"WARNING: {warning}")
 
 
 if __name__ == "__main__":

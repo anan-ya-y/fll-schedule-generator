@@ -75,6 +75,11 @@ and 8 minutes later by default), while the head referee is reserved only for the
 first 5 execution minutes. This lets scoring overlap a later match on a different
 pair without allowing match executions to overlap.
 
+Matches visit the configured pairs in order within each round and cycle back to
+the first pair after the last one. For example, six tables run as `1+2`, `3+4`,
+`5+6`, `1+2`, and so on. The solver inserts waiting time if scoring has not yet
+released the next pair.
+
 In the `day` section, `start_time` is the fixed opening-ceremony start.
 `opening_ceremony_duration` blocks all judging and matches until the ceremony ends.
 `judging_start_time` is the fixed first judging time and must not precede the end
@@ -111,7 +116,8 @@ The default `lexicographic` mode uses strict priorities rather than weights:
 
 1. earliest overall competitive finish;
 2. largest separation between the end of judging and the end of table rounds; and
-3. largest minimum team gap.
+3. most distinct physical-table assignments across teams; and
+4. largest minimum team gap.
 
 Each completed stage is locked before the next stage is solved. With the default
 finish allowance of zero, later objectives may not lengthen the day. Existing idle
@@ -125,6 +131,7 @@ To experiment with tradeoffs, set these values in the `solver` section:
   "objective_mode": "weighted",
   "overall_finish_weight": 10,
   "judging_separation_weight": 5,
+  "table_diversity_weight": 1,
   "minimum_gap_weight": 1
 }
 ```
@@ -134,10 +141,12 @@ Weighted mode minimizes:
 ```text
 overall_finish_weight * overall_finish
 - judging_separation_weight * (table_finish - judging_finish)
+- table_diversity_weight * distinct_team_table_assignments
 - minimum_gap_weight * minimum_team_gap
 ```
 
-All terms are measured in minutes. Raising a weight makes that goal more important.
+Time terms are measured in minutes; table diversity is a count of distinct
+team-table assignments. Raising a weight makes that goal more important.
 For example, increasing `judging_separation_weight` rewards earlier judging relative
 to table completion; increasing `overall_finish_weight` discourages extending the
 day. A separation weight larger than the finish weight can intentionally make table

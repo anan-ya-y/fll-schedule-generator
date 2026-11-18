@@ -58,7 +58,7 @@ assigned exactly once to each judging type.
 | `matches_start_time_latest` | Latest allowed start for the first Round 1 match. If `null`, the first match is fixed at `matches_start_time`. |
 | `lunch_start` | Earliest allowed lunch start. Every table and judging appointment must be wholly before lunch or start at/after lunch ends. |
 | `lunch_start_latest` | Latest allowed lunch start. If `null`, lunch is fixed at `lunch_start`. |
-| `nminutes_lunch` | Length of the lunch block. It is enforced in every table and judging room. |
+| `nminutes_lunch` | Length of the lunch block. A positive duration is enforced in every table and judging room. Set it to `0` to disable lunch entirely: events may cross `lunch_start`, and no Lunch rows are emitted. |
 | `closing_ceremony_time` | Earliest allowed closing-ceremony start. Closing cannot start until all competitive events finish and deliberation after judging is complete. |
 | `closing_ceremony_time_latest` | Latest allowed closing-ceremony start. If `null`, closing is fixed at `closing_ceremony_time`. |
 | `deliberation_duration` | Required time from the end of the final judging appointment to the start of closing. It may overlap table matches. |
@@ -88,13 +88,14 @@ minimum gap is larger.
 
 | Field | What it does |
 |---|---|
-| `max_time_seconds` | CP-SAT time limit for **each** solve stage, not necessarily the whole run. Lexicographic mode can run three stages. |
+| `max_time_seconds` | CP-SAT time limit for **each** solve stage, not necessarily the whole run. Lexicographic mode can run four stages. |
 | `num_search_workers` | Number of parallel CP-SAT search workers. |
 | `random_seed` | Seed passed to CP-SAT. It affects search/reproducibility, not the validity rules. |
 | `finish_allowance` | Lexicographic mode only: after the earliest finish found in stage 1, later stages may finish up to this many minutes later. `0` prevents later goals from intentionally lengthening the competitive schedule. |
 | `objective_mode` | `"lexicographic"` uses strict ordered goals; `"weighted"` combines all goals into one expression. |
 | `overall_finish_weight` | Weighted mode only: penalty per minute of competitive finish time. A larger value favors an earlier finish. |
 | `judging_separation_weight` | Weighted mode only: reward per minute of `table_finish - judging_finish`, favoring judging that ends earlier relative to the table rounds. |
+| `table_diversity_weight` | Weighted mode only: reward for each distinct physical table used by a team across its matches. |
 | `minimum_gap_weight` | Weighted mode only: reward per minute in the smallest team event gap. |
 | `log_search_progress` | Enables OR-Tools CP-SAT search logging. It changes diagnostics, not the model. |
 
@@ -102,13 +103,16 @@ Lexicographic mode runs these goals in order:
 
 1. Minimize the end time of the last competitive event.
 2. Maximize `table_finish - judging_finish`, subject to the finish found in step 1 plus `finish_allowance`.
-3. Maximize the smallest gap between any two events for any team, while retaining the best judging/table separation found in step 2.
+3. Maximize distinct team-table assignments, preferring three different physical tables for each team's three matches when possible.
+4. Maximize the smallest gap between any two events for any team, while retaining the results of the earlier stages.
 
-Weighted mode minimizes this single expression (all terms are minutes):
+Weighted mode minimizes this single expression. Time terms are minutes; table
+diversity is a count of distinct team-table assignments:
 
 ```text
 overall_finish_weight * competitive_finish
 - judging_separation_weight * (table_finish - judging_finish)
+- table_diversity_weight * distinct_team_table_assignments
 - minimum_gap_weight * minimum_team_gap
 ```
 

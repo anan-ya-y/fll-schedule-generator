@@ -31,6 +31,7 @@ class OptimizationResult:
     finish: int
     judging_finish: int
     table_finish: int
+    table_diversity: int
     judging_table_separation: int
     opening_start: int
     judging_start: int
@@ -53,6 +54,7 @@ class OptimizationResult:
             "finish_minute": self.finish,
             "judging_finish_minute": self.judging_finish,
             "table_finish_minute": self.table_finish,
+            "distinct_team_table_assignments": self.table_diversity,
             "judging_table_separation_minutes": self.judging_table_separation,
             "opening_start_minute": self.opening_start,
             "judging_start_minute": self.judging_start,
@@ -91,6 +93,7 @@ def optimize(config: Config) -> OptimizationResult:
             config.solver.overall_finish_weight * variables.finish
             - config.solver.judging_separation_weight
             * (variables.table_finish - variables.judging_finish)
+            - config.solver.table_diversity_weight * variables.table_diversity
             - config.solver.minimum_gap_weight * variables.min_gap
         )
         model.Minimize(weighted_objective)
@@ -146,6 +149,25 @@ def optimize(config: Config) -> OptimizationResult:
         )
         fallback_solver = first_solver
 
+    model.Maximize(variables.table_diversity)
+    diversity_solver = _new_solver(config)
+    diversity_status = diversity_solver.Solve(model)
+    if diversity_status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        diversity_value = diversity_solver.Value(variables.table_diversity)
+        stages["maximum_table_diversity"] = _stage(
+            diversity_solver,
+            diversity_status,
+            diversity_value,
+        )
+        model.Add(variables.table_diversity >= diversity_value)
+        fallback_solver = diversity_solver
+    else:
+        stages["maximum_table_diversity"] = _stage(
+            diversity_solver,
+            diversity_status,
+            None,
+        )
+
     model.Maximize(variables.min_gap)
     gap_solver = _new_solver(config)
     gap_status = gap_solver.Solve(model)
@@ -187,6 +209,7 @@ def _result(
         finish=finish,
         judging_finish=judging_finish,
         table_finish=table_finish,
+        table_diversity=solver.Value(variables.table_diversity),
         judging_table_separation=table_finish - judging_finish,
         opening_start=solver.Value(variables.opening_start),
         judging_start=solver.Value(variables.judging_start),
@@ -332,6 +355,8 @@ def _extract_anonymous_events(
     lunch_start = solver.Value(variables.lunch_start)
     all_rooms = table_names + room_names["Project"] + room_names["Design"]
     for room in all_rooms:
+        if config.day.nminutes_lunch <= 0:
+            continue
         room_activities = [
             row
             for row in rows
