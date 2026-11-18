@@ -37,6 +37,38 @@ class TemplateRenderResult:
     files: list[Path]
 
 
+@dataclass
+class AnonymousTemplateResult:
+    optimization: OptimizationResult
+    files: list[Path]
+
+
+def generate_anonymous_template(
+    config: Config,
+    output_folder: str | Path,
+) -> AnonymousTemplateResult:
+    """Run only the optimizer and save its anonymous, reusable template."""
+    config.validate()
+    output = Path(output_folder)
+    output.mkdir(parents=True, exist_ok=True)
+    generated_config_path = output / "config_generated.json"
+    config.to_json(generated_config_path)
+    optimization = optimize(config)
+    template_path = output / (
+        "tournament_schedule_template_"
+        + datetime.now().strftime("%Y%m%d_%H%M%S")
+        + ".csv"
+    )
+    optimization.events.to_csv(template_path, index=False)
+    metrics_path = output / "optimization_metrics.json"
+    with metrics_path.open("w", encoding="utf-8") as handle:
+        json.dump(optimization.metrics(), handle, indent=4)
+    return AnonymousTemplateResult(
+        optimization=optimization,
+        files=[generated_config_path, template_path, metrics_path],
+    )
+
+
 def generate_schedule(
     config: Config,
     tournament_details: dict[str, Any],
@@ -150,6 +182,7 @@ def render_solved_template(
     output_folder: str | Path,
     tournament_date: str | None = None,
     generate_pdfs: bool = True,
+    team_list_csv: str | Path | None = None,
 ) -> TemplateRenderResult:
     """Fill a solved template with tournament details without running a solver."""
     output = Path(output_folder)
@@ -157,9 +190,12 @@ def render_solved_template(
     details_path = Path(tournament_details_path)
     with details_path.open(encoding="utf-8") as handle:
         tournament_details = json.load(handle)
-    team_list = Path(tournament_details["teamlist"])
-    if not team_list.is_absolute() and not team_list.exists():
-        team_list = details_path.parent / team_list
+    if team_list_csv is not None:
+        team_list = Path(team_list_csv)
+    else:
+        team_list = Path(tournament_details["teamlist"])
+        if not team_list.is_absolute() and not team_list.exists():
+            team_list = details_path.parent / team_list
     tournament = Tournament.from_template(
         template_csv,
         team_list,
