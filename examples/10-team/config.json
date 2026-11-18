@@ -1,45 +1,47 @@
 {
-  "tournament": {
-    "nteams": 10,
-    "njudging_rooms": 2,
-    "ntables": 6,
-    "ntable_rounds": 3
-  },
-  "table": {
-    "match_break_duration": 10,
-    "nminutes_execution": 5,
-    "nminutes_table_rnd1": 10,
-    "nminutes_table_allrounds": 8
-  },
-  "judging": {
-    "nminutes_judging": 10,
-    "nminutes_between_judging": 10,
-    "nteams_per_judging_sprint": 3,
-    "extra_sprint_break": 5
-  },
-  "day": {
-    "start_time": "15:00",
-    "opening_ceremony_duration": 10,
-    "judging_start_time": "15:10",
-    "matches_start_time": "15:10",
-    "lunch_start": "15:00",
-    "nminutes_lunch": 0,
-    "closing_ceremony_time": "15:30",
-    "closing_ceremony_time_latest": "19:00",
-    "deliberation_duration": 30
-  },
-  "team": {
-    "time_between_events": 0
-  },
-  "solver": {
-    "max_time_seconds": 120,
-    "num_search_workers": 8,
-    "random_seed": 2025,
-    "finish_allowance": 0,
-    "objective_mode": "lexicographic",
-    "overall_finish_weight": 10,
-    "judging_separation_weight": 5,
-    "minimum_gap_weight": 1,
-    "log_search_progress": false
-  }
+    "tournament": {
+        "nteams": 20,
+        "njudging_rooms": 2,
+        "ntables": 2,
+        "ntable_rounds": 3
+    },
+    "table": {
+        "match_break_duration": 10,
+        "nminutes_execution": 5,
+        "nminutes_table_rnd1": 10,
+        "nminutes_table_allrounds": 8
+    },
+    "judging": {
+        "nminutes_judging": 10,
+        "nminutes_between_judging": 10,
+        "nteams_per_judging_sprint": 3,
+        "extra_sprint_break": 5
+    },
+    "day": {
+        "start_time": "09:00",
+        "opening_ceremony_duration": 20,
+        "judging_start_time": null,
+        "matches_start_time": "09:30",
+        "matches_start_time_latest": null,
+        "lunch_start": "12:00",
+        "lunch_start_latest": null,
+        "nminutes_lunch": 60,
+        "closing_ceremony_time": "15:30",
+        "closing_ceremony_time_latest": "18:00",
+        "deliberation_duration": 0
+    },
+    "team": {
+        "time_between_events": 20
+    },
+    "solver": {
+        "max_time_seconds": 60.0,
+        "num_search_workers": 8,
+        "random_seed": 2025,
+        "finish_allowance": 0,
+        "objective_mode": "lexicographic",
+        "overall_finish_weight": 10,
+        "judging_separation_weight": 5,
+        "minimum_gap_weight": 1,
+        "log_search_progress": false
+    }
 }

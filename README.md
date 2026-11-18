@@ -18,16 +18,22 @@ NOTE: TO GET THE SHORTEST TOURNAMENT POSSIBLE, PUT THE END TIME AS EARLY AS POSS
 
 ## Desktop app
 
-`scheduler_gui.py` provides a native desktop interface for organizers who do not
-use the Python command line. It supports team CSV import and editing, reusable
-setup folders, guided tournament settings, background optimization, validation,
-and one-click access to the generated timeline and result folder.
+`scheduler_gui.py` is a small native launcher for already-created tournament
+inputs. Choose either `config.json` or an existing solved template, then select
+`teamlist.csv` and `tournament_details.json` explicitly. The GUI never creates or
+edits configuration, room, or team files. When using `config.json`, clear the
+operational-output checkbox to run only the optimizer and create an anonymous
+`tournament_schedule_template_*.csv`; team, tournament-details, and date fields
+are not required for that mode.
 
-For development, launch it from an installed environment with:
+For development on Windows, launch the source directly from the build environment:
 
-```sh
-venv/bin/python scheduler_gui.py
+```powershell
+.\build_venv\Scripts\python.exe .\scheduler_gui.py
 ```
+
+This shows source changes immediately; rebuilding the executable is only needed
+when you want a new distributable `.exe`.
 
 To hand the application to a Windows user who does not have Python, build the
 standalone executable once from PowerShell on a Windows machine with Python 3.12

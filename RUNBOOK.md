@@ -5,10 +5,10 @@ All commands below are run from Bash in Linux or WSL, from the repository root.
 ## Desktop interface for tournament staff
 
 Windows users can run `FLL Schedule Generator.exe` without installing Python.
-The app walks through setup, teams, schedule times, advanced settings, and results.
-Use **File > Save setup** to save reusable inputs, or **File > Open saved setup**
-to reopen a setup folder later. **Generate schedule** runs the optimizer in the
-background and enables buttons to open the combined timeline and result folder.
+The single-screen app accepts either `config.json` or an anonymous solved-template
+CSV, followed by explicit `teamlist.csv` and `tournament_details.json` paths. It
+does not edit or create tournament inputs. With `config.json`, uncheck the filled
+output package to run only the optimizer and produce a reusable anonymous template.
 
 To prepare the distributable executable, a developer runs the following once in
 PowerShell on Windows with Python 3.12 or 3.13 installed:
