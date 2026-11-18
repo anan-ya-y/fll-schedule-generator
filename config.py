@@ -29,10 +29,6 @@ class TournamentSettings:
     njudging_rooms: int = 2
     ntables: int = 2
     ntable_rounds: int = 3
-    project_room_names: list[str] = field(default_factory=lambda: ["P1", "P2"])
-    design_room_names: list[str] = field(default_factory=lambda: ["D1", "D2"])
-    table_names: list[str] = field(default_factory=lambda: ["Table 1", "Table 2"])
-    odd_team_policy: str = "reject"
 
 
 @dataclass
@@ -54,7 +50,6 @@ class JudgingSettings:
 @dataclass
 class DaySettings:
     start_time: str = "09:00"
-    start_time_latest: str | None = None
     opening_ceremony_duration: int = 20
     judging_start_time: str | None = None
     matches_start_time: str = "09:30"
@@ -64,9 +59,7 @@ class DaySettings:
     nminutes_lunch: int = 60
     closing_ceremony_time: str = "15:30"
     closing_ceremony_time_latest: str | None = "18:00"
-    closing_ceremony_duration: int = 45
     deliberation_duration: int = 0
-    venue_closing_time: str | None = None
 
 
 @dataclass
@@ -89,7 +82,6 @@ class SolverSettings:
 
 @dataclass
 class Config:
-    seed: int = 2025
     tournament: TournamentSettings = field(default_factory=TournamentSettings)
     table: TableSettings = field(default_factory=TableSettings)
     judging: JudgingSettings = field(default_factory=JudgingSettings)
@@ -107,22 +99,8 @@ class Config:
             raise ValueError("The optimizer currently requires exactly three table rounds")
         if tournament.nteams <= 0:
             raise ValueError("nteams must be positive")
-        if tournament.nteams % 2 and tournament.odd_team_policy not in {"reject", "dummy"}:
-            raise ValueError("odd_team_policy must be 'reject' or 'dummy'")
-        if tournament.nteams % 2 and tournament.odd_team_policy == "reject":
-            raise ValueError("nteams must be even when odd_team_policy is 'reject'")
-        if tournament.odd_team_policy not in {"reject", "dummy"}:
-            raise ValueError("odd_team_policy must be 'reject' or 'dummy'")
         if tournament.njudging_rooms <= 0:
             raise ValueError("njudging_rooms must be positive")
-        if len(tournament.table_names) != tournament.ntables:
-            raise ValueError("table_names must match ntables")
-        if len(set(tournament.table_names)) != len(tournament.table_names):
-            raise ValueError("table_names must be unique")
-        if len(tournament.project_room_names) != tournament.njudging_rooms:
-            raise ValueError("project_room_names must match njudging_rooms")
-        if len(tournament.design_room_names) != tournament.njudging_rooms:
-            raise ValueError("design_room_names must match njudging_rooms")
         if self.team.time_between_events < 0:
             raise ValueError("time_between_events cannot be negative")
         if self.table.nminutes_execution <= 0:
@@ -229,9 +207,6 @@ class Config:
         return config
 
     def _apply_mapping(self, data: dict[str, Any]) -> None:
-        if "seed" in data:
-            self.seed = int(data["seed"])
-            self.solver.random_seed = self.seed
         sections = {
             "tournament": self.tournament,
             "table": self.table,
@@ -244,14 +219,6 @@ class Config:
             for key, value in data.get(section_name, {}).items():
                 if hasattr(target, key):
                     setattr(target, key, value)
-
-        # Old main-branch JSON stores these derived values. They are intentionally
-        # ignored in favor of the source settings above.
-        room_count = self.tournament.njudging_rooms
-        if "project_room_names" not in data.get("tournament", {}):
-            self.tournament.project_room_names = [f"P{i + 1}" for i in range(room_count)]
-        if "design_room_names" not in data.get("tournament", {}):
-            self.tournament.design_room_names = [f"D{i + 1}" for i in range(room_count)]
 
     def to_dict(self) -> dict[str, Any]:
         def serialize(value: Any) -> Any:

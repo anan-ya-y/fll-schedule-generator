@@ -5,7 +5,7 @@ from typing import Any
 
 from ortools.sat.python import cp_model
 
-from config import Config, parse_time
+from config import Config
 
 
 EVENT_KEYS = ("R1", "R2", "R3", "Project", "Design")
@@ -65,7 +65,7 @@ def build_model(config: Config) -> BuiltModel:
     rounds = range(3)
     tables = range(config.tournament.ntables)
     matches = range(nteams // 2)
-    horizon = parse_time(config.day.venue_closing_time) if config.day.venue_closing_time else 24 * 60
+    horizon = 24 * 60
 
     opening_low, opening_high = config.opening_window
     judging_low, judging_high = config.judging_window
@@ -356,12 +356,6 @@ def build_model(config: Config) -> BuiltModel:
     model.AddMaxEquality(table_finish, table_ends)
     model.Add(closing_start >= finish)
     model.Add(closing_start >= judging_finish + config.day.deliberation_duration)
-    if config.day.venue_closing_time:
-        model.Add(
-            closing_start + config.day.closing_ceremony_duration
-            <= parse_time(config.day.venue_closing_time)
-        )
-
     variables = ModelVariables(
         opening_start=opening_start,
         match_day_start=match_day_start,

@@ -25,8 +25,6 @@ except ModuleNotFoundError as error:
 def small_config() -> Config:
     config = Config()
     config.tournament.nteams = 4
-    config.tournament.project_room_names = ["Project A", "Project B"]
-    config.tournament.design_room_names = ["Design A", "Design B"]
     config.day.start_time = "08:00"
     config.day.judging_start_time = "08:30"
     config.day.matches_start_time = "11:30"
@@ -38,6 +36,15 @@ def small_config() -> Config:
     config.solver.num_search_workers = 1
     config.validate()
     return config
+
+
+def room_details(ntables: int = 2, njudging_rooms: int = 2) -> dict[str, object]:
+    return {
+        "teamlist": "teamlist.csv",
+        "table_rooms": [f"Table {index + 1}" for index in range(ntables)],
+        "project_rooms": [f"Project {index + 1}" for index in range(njudging_rooms)],
+        "design_rooms": [f"Design {index + 1}" for index in range(njudging_rooms)],
+    }
 
 
 def team_list() -> pd.DataFrame:
@@ -56,7 +63,11 @@ class OptimizerIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.result = optimize(small_config())
-        cls.tournament = Tournament.from_optimization(cls.result, team_list())
+        cls.tournament = Tournament.from_optimization(
+            cls.result,
+            team_list(),
+            room_details(),
+        )
 
     def test_legacy_dataframe_contract(self) -> None:
         self.assertEqual(list(self.tournament.events.columns), FINAL_EVENT_COLUMNS)
@@ -165,18 +176,44 @@ class OptimizerIntegrationTests(unittest.TestCase):
             teams = directory / "teams.csv"
             self.result.events.to_csv(template, index=False)
             team_list()[["Team #", "Team Name", "Note"]].to_csv(teams, index=False)
-            rendered = Tournament.from_template(template, teams)
+            details = {
+                "teamlist": str(teams),
+                "table_rooms": ["Red Table", "Blue Table"],
+                "project_rooms": ["Project A", "Project B"],
+                "design_rooms": ["Design A", "Design B"],
+            }
+            rendered = Tournament.from_template(
+                template,
+                teams,
+                details,
+            )
             report = validate_tournament(rendered)
         self.assertEqual(len(rendered.events[rendered.events["EventName"] == "Table"]), 12)
         self.assertEqual(set(rendered.events.loc[rendered.events["Team"] > 0, "Team"]), {101, 202, 303, 404})
+        self.assertEqual(rendered.table_names, ["Red Table", "Blue Table"])
+        self.assertTrue(
+            set(rendered.events["Room"]).issuperset(
+                {"Red Table", "Blue Table", "Project A", "Design A"}
+            )
+        )
         self.assertGreaterEqual(report.minimum_gap, 10)
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_removed_fields_are_not_serialized(self) -> None:
+        data = Config().to_dict()
+        self.assertNotIn("seed", data)
+        self.assertNotIn("odd_team_policy", data["tournament"])
+        self.assertNotIn("venue_closing_time", data["day"])
+        self.assertNotIn("table_names", data["tournament"])
+        self.assertNotIn("project_room_names", data["tournament"])
+        self.assertNotIn("design_room_names", data["tournament"])
+        self.assertNotIn("start_time_latest", data["day"])
+        self.assertNotIn("closing_ceremony_duration", data["day"])
+
     def test_table_count_must_form_complete_pairs(self) -> None:
         config = Config()
         config.tournament.ntables = 3
-        config.tournament.table_names = ["Table 1", "Table 2", "Table 3"]
         with self.assertRaisesRegex(ValueError, "even number"):
             config.validate()
 
@@ -204,14 +241,22 @@ class ConfigurationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "matches_start_time"):
             config.validate()
 
-    def test_odd_team_count_requires_explicit_dummy_policy(self) -> None:
+    def test_odd_team_count_automatically_adds_dummy_identity(self) -> None:
         config = Config()
         config.tournament.nteams = 5
-        with self.assertRaisesRegex(ValueError, "must be even"):
-            config.validate()
-        config.tournament.odd_team_policy = "dummy"
         config.validate()
         self.assertEqual(config.effective_nteams, 6)
+
+        teams = pd.DataFrame(
+            {
+                "Team #": [101, 102, 103, 104, 105],
+                "Team Name": ["A", "B", "C", "D", "E"],
+                "Distance": [1, 2, 3, 4, 5],
+            }
+        )
+        normalized = Tournament._normalize_team_list(config, teams)
+        self.assertEqual(len(normalized), 6)
+        self.assertEqual(int(normalized.iloc[-1]["Team #"]), 99999)
 
 
 @unittest.skipIf(optimize is None, "OR-Tools is not installed")
@@ -220,15 +265,13 @@ class MultiTableOptimizerTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         config = small_config()
         config.tournament.ntables = 4
-        config.tournament.table_names = [
-            "Table 1",
-            "Table 2",
-            "Table 3",
-            "Table 4",
-        ]
         config.solver.max_time_seconds = 30
         cls.result = optimize(config)
-        cls.tournament = Tournament.from_optimization(cls.result, team_list())
+        cls.tournament = Tournament.from_optimization(
+            cls.result,
+            team_list(),
+            room_details(ntables=4),
+        )
 
     def test_matches_use_only_configured_adjacent_pairs(self) -> None:
         table_events = self.tournament.events[

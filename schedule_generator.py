@@ -10,7 +10,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument(
         "--tournament_details",
         required=True,
-        help="JSON containing teamlist, design_rooms, and project_rooms",
+        help="JSON containing teamlist and table/project/design room names",
     )
     parser.add_argument("--output_folder", default="output/")
     parser.add_argument("--tournament_date", required=True, help="FLLT date, e.g. 1/31/2026")

@@ -33,10 +33,14 @@ class Tournament:
         config: Config,
         events: pd.DataFrame,
         team_list: pd.DataFrame,
+        room_names: dict[str, list[str]],
         optimization_result: OptimizationResult | None = None,
     ) -> None:
         self.config = config
         self.optimization_result = optimization_result
+        self.table_names = room_names["table_rooms"]
+        self.project_room_names = room_names["project_rooms"]
+        self.design_room_names = room_names["design_rooms"]
         self.nteams = config.effective_nteams
         self.teamid_keys = list(range(1, self.nteams + 1))
         self.config.tournament.nproject_rooms = self.config.tournament.njudging_rooms
@@ -62,23 +66,27 @@ class Tournament:
             int(row["Team #"]): str(row["Team Name"]).strip()
             for _, row in team_list.iterrows()
         }
-        self.events = self._assign_actual_teams(events.copy(), team_list)
+        named_events = self._apply_room_names(events.copy(), room_names)
+        self.events = self._assign_actual_teams(named_events, team_list)
 
     @classmethod
     def from_optimization(
         cls,
         result: OptimizationResult,
         team_list: str | Path | pd.DataFrame,
+        tournament_details: dict[str, Any],
     ) -> "Tournament":
         frame = pd.read_csv(team_list) if not isinstance(team_list, pd.DataFrame) else team_list.copy()
         normalized = cls._normalize_team_list(result.config, frame)
-        return cls(result.config, result.events, normalized, result)
+        room_names = cls.room_names_from_details(result.config, tournament_details)
+        return cls(result.config, result.events, normalized, room_names, result)
 
     @classmethod
     def from_template(
         cls,
         template_csv: str | Path,
         team_list: str | Path | pd.DataFrame,
+        tournament_details: dict[str, Any],
     ) -> "Tournament":
         """Attach real teams to an already-solved anonymous schedule template."""
         events = pd.read_csv(template_csv)
@@ -98,14 +106,80 @@ class Tournament:
         if team_ids != list(range(1, len(team_ids) + 1)):
             raise ValueError("Template team IDs must be consecutive integers starting at 1")
         config = cls._infer_config(events, len(team_ids))
+        if "table_rooms" in tournament_details:
+            config.tournament.ntables = len(tournament_details["table_rooms"])
+        if "project_rooms" in tournament_details:
+            config.tournament.njudging_rooms = len(tournament_details["project_rooms"])
+        config.validate()
 
         frame = pd.read_csv(team_list) if not isinstance(team_list, pd.DataFrame) else team_list.copy()
+        if len(frame) == len(team_ids) - 1:
+            config.tournament.nteams = len(frame)
         if "Distance" not in frame:
             frame["Distance"] = range(len(frame))
-        if len(frame) == len(team_ids) - 1:
-            config.tournament.odd_team_policy = "dummy"
         normalized = cls._normalize_team_list(config, frame)
-        return cls(config, events, normalized, None)
+        room_names = cls.room_names_from_details(config, tournament_details)
+        return cls(config, events, normalized, room_names, None)
+
+    @staticmethod
+    def room_names_from_details(
+        config: Config,
+        tournament_details: dict[str, Any],
+    ) -> dict[str, list[str]]:
+        """Validate display-only room names against solver capacity settings."""
+        expected_counts = {
+            "table_rooms": config.tournament.ntables,
+            "project_rooms": config.tournament.njudging_rooms,
+            "design_rooms": config.tournament.njudging_rooms,
+        }
+        room_names: dict[str, list[str]] = {}
+        for key, expected_count in expected_counts.items():
+            if key not in tournament_details:
+                raise ValueError(f"tournament_details.json is missing {key}")
+            names = [str(value).strip() for value in tournament_details[key]]
+            if len(names) != expected_count or not all(names):
+                raise ValueError(
+                    f"{key} must contain exactly {expected_count} non-empty names"
+                )
+            room_names[key] = names
+        all_names = sum(room_names.values(), [])
+        if len(set(all_names)) != len(all_names):
+            raise ValueError("Room names must be unique across all room types")
+        return room_names
+
+    @staticmethod
+    def _apply_room_names(
+        events: pd.DataFrame,
+        room_names: dict[str, list[str]],
+    ) -> pd.DataFrame:
+        """Replace generic solver room identifiers with tournament display names."""
+        room_mapping: dict[str, str] = {}
+        for event_name, detail_key in (
+            ("Table", "table_rooms"),
+            ("Project", "project_rooms"),
+            ("Design", "design_rooms"),
+        ):
+            selected = events[events["EventName"] == event_name]
+            source_names = selected["Room"].drop_duplicates().astype(str).tolist()
+            expected_generic = [
+                f"{event_name} {index + 1}"
+                for index in range(len(room_names[detail_key]))
+            ]
+            if set(source_names).issubset(expected_generic):
+                source_names = expected_generic
+            target_names = room_names[detail_key]
+            if set(source_names).issubset(target_names):
+                source_names = target_names
+            if len(source_names) != len(target_names):
+                raise ValueError(
+                    f"Solved template has {len(source_names)} {event_name} rooms, "
+                    f"but tournament details contain {len(target_names)}"
+                )
+            room_mapping.update(zip(source_names, target_names, strict=True))
+        events["Room"] = events["Room"].map(
+            lambda value: room_mapping.get(str(value), value)
+        )
+        return events
 
     @staticmethod
     def _infer_config(events: pd.DataFrame, nteams: int) -> Config:
@@ -121,11 +195,8 @@ class Tournament:
             raise ValueError("Template rendering requires at least two table rooms")
         if not project_rooms or len(project_rooms) != len(design_rooms):
             raise ValueError("Template must have equal nonzero Project and Design room counts")
-        config.tournament.table_names = table_names
         config.tournament.ntables = len(table_names)
         config.tournament.njudging_rooms = len(project_rooms)
-        config.tournament.project_room_names = project_rooms
-        config.tournament.design_room_names = design_rooms
         config.tournament.ntable_rounds = int(table_events["RoundNo"].max())
 
         round_one = table_events[table_events["RoundNo"] == 1]
@@ -181,7 +252,6 @@ class Tournament:
             + config.day.lunch_start.minute
             + config.day.nminutes_lunch
         )
-        config.day.venue_closing_time = None
         config.day.deliberation_duration = 0
         config.team.time_between_events = 0
         config.validate()
@@ -208,7 +278,7 @@ class Tournament:
             return team_list.reset_index(drop=True)
         if (
             len(team_list) == expected - 1
-            and config.tournament.odd_team_policy == "dummy"
+            and config.tournament.nteams % 2 == 1
         ):
             dummy = pd.DataFrame(
                 [

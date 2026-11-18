@@ -46,18 +46,13 @@ def generate_schedule(
     details_base_directory: str | Path | None = None,
 ) -> WorkflowResult:
     """Run optimization, validation, and every requested legacy export."""
-    project_rooms = list(tournament_details["project_rooms"])
-    design_rooms = list(tournament_details["design_rooms"])
-    if len(project_rooms) != len(design_rooms):
-        raise ValueError("Project and Design must have the same number of rooms")
-    config.tournament.njudging_rooms = len(project_rooms)
-    config.tournament.project_room_names = project_rooms
-    config.tournament.design_room_names = design_rooms
     config.validate()
+    Tournament.room_names_from_details(config, tournament_details)
 
     output = Path(output_folder)
     output.mkdir(parents=True, exist_ok=True)
-    config.to_json("config_generated.json")
+    generated_config_path = output / "config_generated.json"
+    config.to_json(generated_config_path)
     optimization = optimize(config)
     template_path = output / (
         "tournament_schedule_template_"
@@ -69,7 +64,11 @@ def generate_schedule(
     team_list = Path(tournament_details["teamlist"])
     if not team_list.is_absolute() and not team_list.exists() and details_base_directory:
         team_list = Path(details_base_directory) / team_list
-    tournament = Tournament.from_optimization(optimization, team_list)
+    tournament = Tournament.from_optimization(
+        optimization,
+        team_list,
+        tournament_details,
+    )
     validation = validate_tournament(tournament)
 
     normalized_path = output / "tournament_schedule.csv"
@@ -82,7 +81,7 @@ def generate_schedule(
     with metrics_path.open("w", encoding="utf-8") as handle:
         json.dump(metrics, handle, indent=4)
 
-    files = [template_path, normalized_path, metrics_path]
+    files = [generated_config_path, template_path, normalized_path, metrics_path]
     files.append(create_fllt(tournament, output, tournament_date))
     files.append(create_all_rooms_schedule(tournament, output))
     files.append(
@@ -147,15 +146,25 @@ def load_and_generate(
 
 def render_solved_template(
     template_csv: str | Path,
-    team_list_csv: str | Path,
+    tournament_details_path: str | Path,
     output_folder: str | Path,
     tournament_date: str | None = None,
     generate_pdfs: bool = True,
 ) -> TemplateRenderResult:
-    """Attach teams and render outputs without building or solving a model."""
+    """Fill a solved template with tournament details without running a solver."""
     output = Path(output_folder)
     output.mkdir(parents=True, exist_ok=True)
-    tournament = Tournament.from_template(template_csv, team_list_csv)
+    details_path = Path(tournament_details_path)
+    with details_path.open(encoding="utf-8") as handle:
+        tournament_details = json.load(handle)
+    team_list = Path(tournament_details["teamlist"])
+    if not team_list.is_absolute() and not team_list.exists():
+        team_list = details_path.parent / team_list
+    tournament = Tournament.from_template(
+        template_csv,
+        team_list,
+        tournament_details,
+    )
     validation = validate_tournament(tournament)
 
     normalized_path = output / "tournament_schedule.csv"

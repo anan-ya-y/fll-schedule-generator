@@ -7,10 +7,14 @@ from workflow import render_solved_template
 
 def arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Attach a team list to a solved template and render schedules"
+        description="Fill a solved template with tournament details and render schedules"
     )
     parser.add_argument("--template", required=True, help="Solved anonymous template CSV")
-    parser.add_argument("--teams", required=True, help="Team-list CSV")
+    parser.add_argument(
+        "--tournament-details",
+        required=True,
+        help="JSON containing teamlist and display room names",
+    )
     parser.add_argument("--output", default="template_output", help="Output folder")
     parser.add_argument(
         "--tournament-date",
@@ -28,7 +32,7 @@ def main() -> None:
     args = arguments()
     result = render_solved_template(
         args.template,
-        args.teams,
+        args.tournament_details,
         args.output,
         tournament_date=args.tournament_date,
         generate_pdfs=not args.skip_pdf,

@@ -209,7 +209,9 @@ def _extract_anonymous_events(
         config.table.nminutes_table_allrounds,
         config.table.nminutes_table_allrounds,
     )
-    table_names = config.tournament.table_names
+    table_names = [
+        f"Table {index + 1}" for index in range(config.tournament.ntables)
+    ]
 
     for round_index in range(3):
         for match_index in range(nteams // 2):
@@ -261,8 +263,11 @@ def _extract_anonymous_events(
                     )
 
     room_names = {
-        "Project": config.tournament.project_room_names,
-        "Design": config.tournament.design_room_names,
+        judging_type: [
+            f"{judging_type} {index + 1}"
+            for index in range(config.tournament.njudging_rooms)
+        ]
+        for judging_type in ("Project", "Design")
     }
     for judging_type, names in room_names.items():
         for room_index, room_name in enumerate(names):
@@ -325,7 +330,7 @@ def _extract_anonymous_events(
                 )
 
     lunch_start = solver.Value(variables.lunch_start)
-    all_rooms = table_names + config.tournament.project_room_names + config.tournament.design_room_names
+    all_rooms = table_names + room_names["Project"] + room_names["Design"]
     for room in all_rooms:
         room_activities = [
             row

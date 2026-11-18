@@ -77,7 +77,16 @@ class OutputContractTests(unittest.TestCase):
                 {"Team #": 202, "Team Name": "Beta", "Distance": 2},
             ]
         )
-        self.tournament = Tournament.from_optimization(result, teams)
+        self.tournament = Tournament.from_optimization(
+            result,
+            teams,
+            {
+                "teamlist": "teamlist.csv",
+                "table_rooms": ["Table 1", "Table 2"],
+                "project_rooms": ["P1", "P2"],
+                "design_rooms": ["D1", "D2"],
+            },
+        )
 
     def test_final_dataframe_shape(self) -> None:
         self.assertEqual(list(self.tournament.events), FINAL_EVENT_COLUMNS)

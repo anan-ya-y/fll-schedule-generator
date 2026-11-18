@@ -27,12 +27,12 @@ def create_all_rooms_schedule(
     """Create a standalone, zoomable timeline containing every event room."""
     events = tournament.events.sort_values(["Time", "Room"], kind="stable")
     configured_rooms = (
-        tournament.config.tournament.table_names
-        + tournament.config.tournament.project_room_names
-        + tournament.config.tournament.design_room_names
+        tournament.table_names
+        + tournament.project_room_names
+        + tournament.design_room_names
     )
     rooms = list(dict.fromkeys(configured_rooms + events["Room"].tolist()))
-    table_rooms = set(tournament.config.tournament.table_names)
+    table_rooms = set(tournament.table_names)
     start_minute = (min(_minutes(value) for value in events["Time"]) // 30) * 30
     end_minute = max(
         _minutes(row.Time) + int(row.Duration)

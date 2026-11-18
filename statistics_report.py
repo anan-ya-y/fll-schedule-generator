@@ -167,9 +167,9 @@ def create_statistics_report(
         ]
     )
     room_order = (
-        tournament.config.tournament.table_names
-        + tournament.config.tournament.project_room_names
-        + tournament.config.tournament.design_room_names
+        tournament.table_names
+        + tournament.project_room_names
+        + tournament.design_room_names
     )
     for room in dict.fromkeys(room_order + events["Room"].tolist()):
         selected = events[events["Room"] == room]

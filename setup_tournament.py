@@ -72,10 +72,7 @@ def main() -> None:
     number_of_teams = ask_int("Number of real teams", config.tournament.nteams)
     config.tournament.nteams = number_of_teams
     if number_of_teams % 2:
-        print("An odd number of teams requires a filler opponent.")
-        if not ask_yes_no("Add the standard dummy team 99999?"):
-            raise SystemExit("An even team count or dummy team is required.")
-        config.tournament.odd_team_policy = "dummy"
+        print("A standard filler team (99999) will be added automatically.")
 
     while True:
         table_count = ask_int("Number of physical tables", config.tournament.ntables)
@@ -84,7 +81,7 @@ def main() -> None:
         print("Please enter an even number of tables (2, 4, 6, ...).")
     config.tournament.ntables = table_count
     print("Tables are paired in the listed order: 1+2, 3+4, and so on.")
-    config.tournament.table_names = ask_rooms("Table", table_count)
+    table_rooms = ask_rooms("Table", table_count)
     execution_minutes = ask_int(
         "Match execution duration in minutes",
         config.table.nminutes_execution,
@@ -105,8 +102,6 @@ def main() -> None:
     project_rooms = ask_rooms("Project", room_count)
     design_rooms = ask_rooms("Design", room_count)
     config.tournament.njudging_rooms = room_count
-    config.tournament.project_room_names = project_rooms
-    config.tournament.design_room_names = design_rooms
     config.day.start_time = ask_text("Opening ceremony start (HH:MM)", config.day.start_time)
     config.day.opening_ceremony_duration = ask_int(
         "Opening ceremony duration in minutes",
@@ -161,6 +156,7 @@ def main() -> None:
     config.to_json(config_path)
     details = {
         "teamlist": str(team_list_path),
+        "table_rooms": table_rooms,
         "project_rooms": project_rooms,
         "design_rooms": design_rooms,
     }

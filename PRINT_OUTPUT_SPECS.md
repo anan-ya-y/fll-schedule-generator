@@ -20,8 +20,8 @@ The intended artifact catalog is:
 As of the referenced commit, the command-line program generates only
 `fllt_schedule.csv` and `emcee_schedule.pdf` from this catalog; calls for the other
 four PDFs are commented out. Each PDF renderer also preserves a same-named `.tex`
-source file. The CLI separately writes `config_generated.json` in the working
-directory and, when it creates a new schedule rather than loading a template,
+source file. The current workflow writes `config_generated.json` in the selected
+output directory and, when it creates a new schedule rather than loading a template,
 writes a timestamped `tournament_schedule_template_*.csv`. The CLI's message saying
 that six output files should exist is therefore not an accurate statement of
 current runtime behavior.
