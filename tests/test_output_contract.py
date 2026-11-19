@@ -6,12 +6,20 @@ from pathlib import Path
 from types import SimpleNamespace
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import pandas as pd
 
 from config import Config
 from schedule import FINAL_EVENT_COLUMNS, Tournament
-from schedule_latex import create_fllt
+from schedule_latex import (
+    create_emcee_schedule,
+    create_fllt,
+    create_judging_schedule,
+    create_ref_schedule,
+    create_room_schedule,
+    create_team_schedule,
+)
 
 
 class OutputContractTests(unittest.TestCase):
@@ -115,6 +123,23 @@ class OutputContractTests(unittest.TestCase):
             ],
         )
         self.assertEqual({row["Type"] for row in rows}, {"Table", "Project", "Robot"})
+
+    def test_all_pdf_renderers_use_lualatex(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            with patch("pylatex.Document.generate_pdf") as generate_pdf:
+                with patch("schedule_latex._paired_table_rows", return_value=iter(())):
+                    for renderer in (
+                        create_emcee_schedule,
+                        create_judging_schedule,
+                        create_ref_schedule,
+                        create_team_schedule,
+                        create_room_schedule,
+                    ):
+                        renderer(self.tournament, directory)
+
+        self.assertEqual(generate_pdf.call_count, 5)
+        for call in generate_pdf.call_args_list:
+            self.assertEqual(call.kwargs["compiler"], "lualatex")
 
 
 if __name__ == "__main__":
