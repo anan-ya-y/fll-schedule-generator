@@ -1,15 +1,15 @@
 {
-  "teamlist": "teamlist.csv",
-  "table_rooms": [
-    "Table 1",
-    "Table 2"
-  ],
-  "project_rooms": [
-    "3013",
-    "3017"
-  ],
-  "design_rooms": [
-    "2013",
-    "2017"
-  ]
+    "teamlist": "teamlist.csv",
+    "table_rooms": [
+        "Table 1",
+        "Table 2"
+    ],
+    "project_rooms": [
+        "Project 1",
+        "Project 2"
+    ],
+    "design_rooms": [
+        "Design 1",
+        "Design 2"
+    ]
 }

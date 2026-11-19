@@ -95,6 +95,38 @@ def generate_anonymous_template(
     )
 
 
+@dataclass
+class AnonymousTemplateResult:
+    optimization: OptimizationResult
+    files: list[Path]
+
+
+def generate_anonymous_template(
+    config: Config,
+    output_folder: str | Path,
+) -> AnonymousTemplateResult:
+    """Run only the optimizer and save its anonymous, reusable template."""
+    config.validate()
+    output = Path(output_folder)
+    output.mkdir(parents=True, exist_ok=True)
+    generated_config_path = output / "config_generated.json"
+    config.to_json(generated_config_path)
+    optimization = optimize(config)
+    template_path = output / (
+        "tournament_schedule_template_"
+        + datetime.now().strftime("%Y%m%d_%H%M%S")
+        + ".csv"
+    )
+    optimization.events.to_csv(template_path, index=False)
+    metrics_path = output / "optimization_metrics.json"
+    with metrics_path.open("w", encoding="utf-8") as handle:
+        json.dump(optimization.metrics(), handle, indent=4)
+    return AnonymousTemplateResult(
+        optimization=optimization,
+        files=[generated_config_path, template_path, metrics_path],
+    )
+
+
 def generate_schedule(
     config: Config,
     tournament_details: dict[str, Any],
